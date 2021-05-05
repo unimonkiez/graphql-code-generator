@@ -170,7 +170,7 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     }
   }
 
-  public OperationDefinition(node: OperationDefinitionNode): string {
+  private getExecuteFunction(isAsync: boolean, node: OperationDefinitionNode) : string {
     if (!node.name || !node.name.value) {
       return null;
     }
@@ -258,5 +258,54 @@ public class ${serviceName} {
 }
     `;
     return [content].filter(a => a).join('\n');
+  }
+
+  private getClientFunction(node: OperationDefinitionNode): string {
+    return `
+    def _get_client(
+      ${node.variableDefinitions.map(variableDefinition => `
+${variableDefinition.variable.name.value}: Types.${variableDefinition.type.kind},`).join('\n      ')}
+  ) -> send_algo_result:
+      transport = AIOHTTPTransport(url=${this.config.schema})
+      client = Client(transport=transport, fetch_schema_from_transport=False)
+      variables = {
+          "token": token,
+          "result": {
+              "recv_time": recv_time,
+              "red_peaks": params_demo_out["red_peaks"],
+              "blue_peaks": params_demo_out["blue_peaks"],
+              "red_peaks_skeleton": params_demo_out["red_peaks_skeleton"],
+              "blue_peaks_skeleton": params_demo_out["blue_peaks_skeleton"],
+              "first_clk": first_clk,
+              "duration": duration,
+              "red_max": params_demo_out["red_max"],
+              "blue_max": params_demo_out["blue_max"],
+              "red_skeleton_max": params_demo_out["red_skeleton_max"],
+              "blue_skeleton_max": params_demo_out["blue_skeleton_max"],
+              "i_max": params_demo_out["i_max"],
+              "i_mean": params_demo_out["i_mean"],
+              "q_max": params_demo_out["q_max"],
+              "q_mean": params_demo_out["q_mean"],
+              "snr": params_demo_out["snr"],
+              "gain": gain,
+              "freq": freq,
+              "is_detect_red": params_demo_out["is_detect_red"],
+              "is_detect_blue": params_demo_out["is_detect_blue"],
+              "is_clock_alignment": params_demo_out["is_clock_alignment"],
+              "iteration_num": iteration_num,
+              "gps_detected": gps_detected,
+              "gps_locked": gps_locked,
+              "rssi": rssi,
+          },
+      }
+`;
+  }
+
+  public OperationDefinition(node: OperationDefinitionNode): string {
+    return [
+      this.getClientFunction(node),
+      this.getExecuteFunction(true, node),
+      this.getExecuteFunction(false, node),
+    ].join('\n\n');
   }
 }

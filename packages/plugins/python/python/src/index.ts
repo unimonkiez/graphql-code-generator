@@ -17,7 +17,7 @@ import { PyVisitor } from './visitor';
 import { TsIntrospectionVisitor } from './introspection-visitor';
 import { PythonPluginConfig } from './config';
 
-export * from './python-variables-to-object';
+export * from '../../common/variables-to-object';
 export * from './visitor';
 export * from './config';
 export * from './introspection-visitor';

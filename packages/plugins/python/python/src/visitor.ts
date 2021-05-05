@@ -26,7 +26,7 @@ import {
   InputObjectTypeDefinitionNode,
   InputValueDefinitionNode,
 } from 'graphql';
-import { PythonOperationVariablesToObject } from './python-variables-to-object';
+import { PythonOperationVariablesToObject } from '../../common/variables-to-object';
 import { PythonDeclarationBlock, transformPythonComment } from '../../common/declaration-block';
 import { PythonScalars } from './scalars';
 
