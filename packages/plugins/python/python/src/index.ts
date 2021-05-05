@@ -37,7 +37,7 @@ export const plugin: PluginFunction<PythonPluginConfig, Types.ComplexPluginOutpu
 
   return {
     prepend: [...visitor.getEnumsImports(), ...visitor.getScalarsImports(), ...visitor.getWrapperDefinitions()],
-    content: [scalars, ...visitorResult.definitions, ...introspectionDefinitions].join('\n'),
+    content: ['', scalars, ...visitorResult.definitions, ...introspectionDefinitions].join('\n'),
   };
 };
 

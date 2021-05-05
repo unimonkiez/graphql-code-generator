@@ -1,4 +1,4 @@
-import { dirname, isAbsolute, join, relative, resolve } from 'path';
+import { dirname, isAbsolute, join, relative, resolve, extname } from 'path';
 import parse from 'parse-filepath';
 
 export type ImportDeclaration<T = string> = {
@@ -50,6 +50,17 @@ export function generateFragmentImportStatement(
 }
 
 export function generateImportStatement(statement: ImportDeclaration): string {
+  switch (extname(statement.importSource.path)) {
+    default:
+    case '.ts':
+    case '.tsx':
+      return generateImportStatementTypescript(statement);
+    case '.py':
+      return generateImportStatementPython(statement);
+  }
+}
+
+function generateImportStatementTypescript(statement: ImportDeclaration): string {
   const { baseDir, importSource, outputPath, typesImport } = statement;
   const importPath = resolveImportPath(baseDir, outputPath, importSource.path);
   const importNames =
@@ -59,6 +70,17 @@ export function generateImportStatement(statement: ImportDeclaration): string {
   const importAlias = importSource.namespace ? ` as ${importSource.namespace}` : '';
   const importStatement = typesImport ? 'import type' : 'import';
   return `${importStatement} ${importNames}${importAlias} from '${importPath}';${importAlias ? '\n' : ''}`;
+}
+
+function generateImportStatementPython(statement: ImportDeclaration): string {
+  const { baseDir, importSource, outputPath } = statement;
+  const importPath = resolveImportPath(baseDir, outputPath, importSource.path).replace(/\.[^/.]+$/, "");
+  const importNames =
+    importSource.identifiers && importSource.identifiers.length
+      ? ` ${Array.from(new Set(importSource.identifiers)).join(', ')}`
+      : '';
+  const importAlias = importSource.namespace ? ` as ${importSource.namespace}` : '';
+  return `import ${importPath}${importNames}${importAlias}${importAlias ? '\n' : ''}`;
 }
 
 function resolveImportPath(baseDir: string, outputPath: string, sourcePath: string) {

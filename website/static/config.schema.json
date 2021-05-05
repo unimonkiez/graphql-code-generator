@@ -4427,6 +4427,10 @@
               "additionalProperties": false,
               "$ref": "#/definitions/PythonPluginConfig"
             },
+            "@graphql-codegen/python-operations": {
+              "additionalProperties": false,
+              "$ref": "#/definitions/PythonOperationsPluginConfig"
+            },
             "schema-ast": {
               "additionalProperties": false,
               "$ref": "#/definitions/SchemaASTConfig"
@@ -4703,6 +4707,14 @@
             {
               "const": "@graphql-codegen/python",
               "description": "This plugin generates the base Python types, based on your GraphQL schema.\n\nThis is equivalent of the `typescript` plugin. The generated types are simple, refer to your schema's exact structure, and will be used as the base type for future plugins (such as `python-operations`).\n\nBy default, this package only supports Python 3.8+, since that is the first time literal types were introduced. If you do need support for Python 3.5-3.7, you'll need to use the typenameAsString option.\n\nFor more details and documentation: https://graphql-code-generator.com/docs/plugins/python\n\n=> Make sure to include \"@graphql-codegen/python\" in your package.json file and install your dependencies.\n\n"
+            },
+            {
+              "const": "python-operations",
+              "description": "This plugin generates the base Python types, based on your GraphQL schema.\n\nThis is equivalent of the `typescript` plugin. The generated types are simple, refer to your schema's exact structure, and will be used as the base type for future plugins (such as `python-operations`).\n\nBy default, this package only supports Python 3.8+, since that is the first time literal types were introduced. If you do need support for Python 3.5-3.7, you'll need to use the typenameAsString option.\n\nFor more details and documentation: https://graphql-code-generator.com/docs/plugins/python\n\n=> Make sure to include \"@graphql-codegen/python-operations\" in your package.json file and install your dependencies.\n\n"
+            },
+            {
+              "const": "@graphql-codegen/python-operations",
+              "description": "This plugin generates the base Python types, based on your GraphQL schema.\n\nThis is equivalent of the `typescript` plugin. The generated types are simple, refer to your schema's exact structure, and will be used as the base type for future plugins (such as `python-operations`).\n\nBy default, this package only supports Python 3.8+, since that is the first time literal types were introduced. If you do need support for Python 3.5-3.7, you'll need to use the typenameAsString option.\n\nFor more details and documentation: https://graphql-code-generator.com/docs/plugins/python\n\n=> Make sure to include \"@graphql-codegen/python-operations\" in your package.json file and install your dependencies.\n\n"
             },
             {
               "const": "schema-ast",

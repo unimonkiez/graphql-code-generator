@@ -27,7 +27,7 @@ import {
   InputValueDefinitionNode,
 } from 'graphql';
 import { PythonOperationVariablesToObject } from './python-variables-to-object';
-import { PythonDeclarationBlock, transformPythonComment } from './declaration-block';
+import { PythonDeclarationBlock, transformPythonComment } from '../../common/declaration-block';
 import { PythonScalars } from './scalars';
 
 const flatMap = require('array.prototype.flatmap');
@@ -91,7 +91,7 @@ export class PyVisitor<
   }
 
   protected _getScalar(name: string): string {
-    return `Scalars.${name}`;
+    return `Scalar${name}`;
   }
 
   public get scalarsDefinition(): string {
@@ -103,14 +103,10 @@ export class PyVisitor<
           ? transformPythonComment(scalarType.description, 1)
           : '';
 
-      return comment + indent(`${scalarName} = Union[${scalarValue}]`);
+      return comment + `Scalar${scalarName} = ${scalarValue}`;
     });
 
-    return new PythonDeclarationBlock(this._declarationBlockConfig)
-      .export()
-      .asKind(this._parsedConfig.declarationKind.scalar)
-      .withName('Scalars')
-      .withBlock(allScalars.join('\n')).string;
+    return allScalars.join('\n') + '\n';
   }
 
   protected clearOptional(str: string): string {

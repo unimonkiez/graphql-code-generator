@@ -52,7 +52,7 @@ export class PythonOperationVariablesToObject extends OperationVariablesToObject
   protected getScalar(name: string) {
     const prefix = this._namespacedImportName ? `${this._namespacedImportName}.` : '';
 
-    return `${prefix}Scalars.${name}`;
+    return `${prefix}Scalar${name}`;
   }
 
   protected formatTypeString(fieldType: string, isNonNullType: boolean, hasDefaultValue: boolean): string {
