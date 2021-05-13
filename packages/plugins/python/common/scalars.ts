@@ -1,15 +1,13 @@
-export const C_SHARP_SCALARS = {
-  ID: 'string',
-  String: 'string',
+export const PYTHON_SCALARS = {
+  ID: 'str',
+  String: 'str',
   Boolean: 'bool',
   Int: 'int',
   Float: 'float',
   Date: 'DateTime',
 };
 
-// All native C# built-in value types
-// See https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/built-in-types
-export const csharpNativeValueTypes = [
+export const pythonNativeValueTypes = [
   'bool',
   'byte',
   'sbyte',
