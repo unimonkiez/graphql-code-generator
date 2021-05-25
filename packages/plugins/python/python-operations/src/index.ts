@@ -6,6 +6,33 @@ import { extname } from 'path';
 import gql from 'graphql-tag';
 import { PythonOperationsRawPluginConfig } from './config';
 
+const getImports = () => {
+  return `
+from typing import Any, Callable, Mapping, List, Optional, Dict
+from dataclasses import dataclass, field
+from dataclasses_json import dataclass_json  # type: ignore
+from gql import Client, WebsocketsTransport, AIOHTTPTransport, gql  # type: ignore
+import json
+`;
+}
+
+const getClientFunction = (config: PythonOperationsRawPluginConfig) => {
+  return `
+def _get_client() -> Client:
+transport = AIOHTTPTransport(url=${config.schema})
+client = Client(transport=transport, fetch_schema_from_transport=False)
+return client
+`;
+}
+
+const getClientSubscriptionsFunction = (config: PythonOperationsRawPluginConfig) => {
+  return `
+def _get_client_subscriptions() -> Client:
+transport = WebsocketsTransport(url=${config.schemaSubscriptions})
+client = Client(transport=transport, fetch_schema_from_transport=False)
+return client
+`;
+}
 export const plugin: PluginFunction<PythonOperationsRawPluginConfig> = (
   schema: GraphQLSchema,
   documents: Types.DocumentFile[],
@@ -28,7 +55,12 @@ export const plugin: PluginFunction<PythonOperationsRawPluginConfig> = (
   const visitorResult = visit(allAst, { leave: visitor });
   return {
     prepend: [],
-    content: [...visitorResult.definitions.filter(t => typeof t === 'string'),]
+    content: [
+      getImports(),
+      getClientFunction(config),
+      getClientSubscriptionsFunction(config),
+      ...visitorResult.definitions.filter(t => typeof t === 'string'),
+    ]
       .filter(a => a)
       .join('\n'),
   };

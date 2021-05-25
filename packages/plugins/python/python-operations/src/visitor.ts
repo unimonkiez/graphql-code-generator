@@ -87,7 +87,7 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     const schemaType = this._schema.getType(innerType.name.value);
 
     const name = variable.variable.name.value;
-    const baseType = !isScalarType(schemaType) ? innerType.name.value : this.scalars[schemaType.name] || 'object';
+    const baseType = !isScalarType(schemaType) ? `Types.${innerType.name.value}` : this.scalars[schemaType.name] || 'object';
 
     const listType = getListTypeField(typeNode);
     const required = getListInnerTypeNode(typeNode).kind === Kind.NON_NULL_TYPE;
@@ -175,14 +175,69 @@ ${isAsync ? `
     return [content].filter(a => a).join('\n');
   }
 
-  private getClientFunction(node: OperationDefinitionNode): string {
-    return `
-def _get_client() -> Client:
-  transport = AIOHTTPTransport(url=${this.config.schema})
-  client = Client(transport=transport, fetch_schema_from_transport=False)
-  return client
+  private getExecuteFunctionSubscriptions(node: OperationDefinitionNode) : string {
+    if (!node.name || !node.name.value) {
+      return null;
+    }
+
+    this._collectedOperations.push(node);
+
+    const documentVariableName = this.convertName(node, {
+      suffix: this.config.documentVariableSuffix,
+      prefix: this.config.documentVariablePrefix,
+      useTypesPrefix: false,
+    });
+
+    const operationType: string = node.operation;
+    const operationTypeSuffix: string =
+      this.config.dedupeOperationSuffix && node.name.value.toLowerCase().endsWith(node.operation)
+        ? ''
+        : !operationType
+        ? ''
+        : operationType;
+
+    const operationResultType: string = this.convertName(node, {
+      suffix: operationTypeSuffix + this._parsedConfig.operationResultSuffix,
+    });
+    const operationVariablesTypes: string = this.convertName(node, {
+      suffix: operationTypeSuffix + 'Variables',
+    });
+
+    this._operationsToInclude.push({
+      node,
+      documentVariableName,
+      operationType,
+      operationResultType,
+      operationVariablesTypes,
+    });
+
+    const inputSignatures = node.variableDefinitions?.map(v => this._gqlInputSignature(v));
+    const hasInputArgs = !!inputSignatures?.length;
+    const inputs = hasInputArgs
+      ? inputSignatures.map(sig => sig.signature).join(', ')
+      : '';
+    const variables = `{
+      ${node.variableDefinitions?.map(v => `"${v.variable.name.value}": ${v.variable.name.value},`).join('\n      ')}
+    }`;
+
+    const content = `
+${isAsync ? 'async ': ''}def execute${isAsync ? '_async' : ''}_${this._get_node_name(node)}(${inputs}) -> Any:
+  client = _get_client()
+${isAsync ? `
+  response_text_promise = client.execute_async(
+    _gql_${this._get_node_name(node)},
+    variable_values=${variables},
+  )
+  response_text = await response_text_promise` : `
+  response_text = client.execute_sync(
+    _gql_${this._get_node_name(node)},
+    variable_values=${variables},
+  )`}
+  return send_algo_result.from_json(json.dumps(response_text))  # type: ignore
 `;
+    return [content].filter(a => a).join('\n');
   }
+
   private _get_node_name(node: OperationDefinitionNode): String {
     return `${this.convertName(node)}_${this._operationSuffix(node.operation)}`.toLowerCase()
   }
@@ -197,9 +252,13 @@ ${this._gql(node)}
   public OperationDefinition(node: OperationDefinitionNode): string {
     return [
       this.getGQLVar(node),
-      this.getClientFunction(node),
-      this.getExecuteFunction(true, node),
+    ]
+    .concat(node.operation === 'subscription' ? [
+      this.getExecuteFunctionSubscriptions(node),
+    ] : [
       this.getExecuteFunction(false, node),
-    ].join('\n\n');
+      this.getExecuteFunction(true, node),
+    ])
+    .join('\n\n');
   }
 }
