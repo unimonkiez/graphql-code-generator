@@ -187,7 +187,7 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
 ${isAsync ? 'async ' : ''}def execute${isAsync ? '_async' : ''}_${this._get_node_name(
       node
     )}(${inputs}) -> ${resposeClass}:
-  client = _get_client_${isAsync ? 'async ' : 'sync'}()
+  client = _get_client_${isAsync ? 'async' : 'sync'}()
 ${
   isAsync
     ? `
