@@ -8,10 +8,12 @@ import { PythonOperationsRawPluginConfig } from './config';
 
 const getImports = () => {
   return `
-from typing import List, Optional
+from typing import List, Optional, AsyncGenerator
 from dataclasses import dataclass
+from dataclasses import asdict
 from gql import Client, WebsocketsTransport, AIOHTTPTransport, RequestsHTTPTransport, gql
-from dacite import from_dict
+from dacite import from_dict, Config
+from enum import Enum
 `;
 };
 

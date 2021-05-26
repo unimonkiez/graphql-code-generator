@@ -36,7 +36,12 @@ export const plugin: PluginFunction<PythonPluginConfig, Types.ComplexPluginOutpu
   const scalars = visitor.scalarsDefinition;
 
   return {
-    prepend: [...visitor.getEnumsImports(), ...visitor.getScalarsImports(), ...visitor.getWrapperDefinitions()],
+    prepend: [
+      ...visitor.getEnumsImports(),
+      ...visitor.getScalarsImports(),
+      ...visitor.getDataclassesImports(),
+      ...visitor.getWrapperDefinitions(),
+    ],
     content: ['', scalars, ...visitorResult.definitions, ...introspectionDefinitions].join('\n'),
   };
 };

@@ -201,6 +201,7 @@ export class PyVisitor<
   getInputObjectDeclarationBlock(node: InputObjectTypeDefinitionNode): DeclarationBlock {
     return new PythonDeclarationBlock(this._declarationBlockConfig)
       .export()
+      .withDecorator('@dataclass')
       .asKind(this._parsedConfig.declarationKind.input)
       .withName(this.convertName(node))
       .withComment((node.description as any) as string)
@@ -318,6 +319,10 @@ export class PyVisitor<
 
       return [];
     }).filter(a => a);
+  }
+
+  public getDataclassesImports(): string[] {
+    return ['from dataclasses import dataclass'];
   }
 
   EnumTypeDefinition(node: EnumTypeDefinitionNode): string {

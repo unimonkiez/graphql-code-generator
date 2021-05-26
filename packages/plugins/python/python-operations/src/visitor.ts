@@ -62,6 +62,7 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
   }[] = [];
 
   private _schemaAST: DocumentNode;
+  private _usingNearFileOperations: boolean;
 
   constructor(
     schema: GraphQLSchema,
@@ -88,6 +89,7 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     autoBind(this);
 
     this._schemaAST = parse(printSchema(schema));
+    this._usingNearFileOperations = true;
   }
 
   // Some settings aren't supported with C#, overruled here
@@ -105,23 +107,30 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     return doc.replace(/"/g, '"""');
   }
 
-  private _gqlInputSignature(variable: VariableDefinitionNode): { signature: string } {
+  private _nonScalarPrefix(): string {
+    return this._usingNearFileOperations ? 'Types.' : '';
+  }
+
+  private _gqlInputSignature(variable: VariableDefinitionNode): { signature: string; value: string; name: string } {
     const typeNode = variable.type;
     const innerType = getBaseTypeNode(typeNode);
     const schemaType = this._schema.getType(innerType.name.value);
 
     const name = variable.variable.name.value;
-    const baseType = !isScalarType(schemaType)
-      ? `Types.${innerType.name.value}`
+    const isInputAScalar = isScalarType(schemaType);
+    const baseType = !isInputAScalar
+      ? `${this._nonScalarPrefix()}${innerType.name.value}`
       : this.scalars[schemaType.name] || 'object';
 
     const listType = getListTypeField(typeNode);
     const required = getListInnerTypeNode(typeNode).kind === Kind.NON_NULL_TYPE;
 
     return {
+      name: name,
       signature: !listType
         ? `${name}: ${!required ? 'Optional[' : ''}${baseType}${!required ? ']' : ''}`
         : `${name}: ${baseType}${'[]'.repeat(getListTypeDepth(listType))}`,
+      value: isInputAScalar ? name : `asdict(${name})`,
     };
   }
 
@@ -174,11 +183,11 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
       operationVariablesTypes,
     });
 
-    const inputSignatures = node.variableDefinitions?.map(v => this._gqlInputSignature(v));
-    const hasInputArgs = !!inputSignatures?.length;
-    const inputs = hasInputArgs ? inputSignatures.map(sig => sig.signature).join(', ') : '';
+    const inputs = node.variableDefinitions?.map(v => this._gqlInputSignature(v));
+    const hasInputArgs = !!inputs?.length;
+    const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
     const variables = `{
-      ${node.variableDefinitions?.map(v => `"${v.variable.name.value}": ${v.variable.name.value},`).join('\n      ')}
+      ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
     }`;
 
     const resposeClass = `${this.convertName(node.name.value).replace(/_/g, '')}Response`;
@@ -186,23 +195,24 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     const content = `
 ${isAsync ? 'async ' : ''}def execute${isAsync ? '_async' : ''}_${this._get_node_name(
       node
-    )}(${inputs}) -> ${resposeClass}:
+    )}(${inputSignatures}) -> ${resposeClass}:
   client = _get_client_${isAsync ? 'async' : 'sync'}()
+  variables=${variables}
 ${
   isAsync
     ? `
   response_text_promise = client.execute_async(
     _gql_${this._get_node_name(node)},
-    variable_values=${variables},
+    variable_values=variables,
   )
   response_dict = await response_text_promise`
     : `
   response_dict = client.execute_sync(
     _gql_${this._get_node_name(node)},
-    variable_values=${variables},
+    variable_values=variables,
   )`
 }
-  return from_dict(data_class=${resposeClass}, data=response_dict)
+  return from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum]))
 `;
     return [content].filter(a => a).join('\n');
   }
@@ -243,25 +253,25 @@ ${
       operationVariablesTypes,
     });
 
-    const inputSignatures = node.variableDefinitions?.map(v => this._gqlInputSignature(v));
-    const hasInputArgs = !!inputSignatures?.length;
-    const inputs = hasInputArgs ? inputSignatures.map(sig => sig.signature).join(', ') : '';
+    const inputs = node.variableDefinitions?.map(v => this._gqlInputSignature(v));
+    const hasInputArgs = !!inputs?.length;
+    const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
     const variables = `{
-      ${node.variableDefinitions?.map(v => `"${v.variable.name.value}": ${v.variable.name.value},`).join('\n      ')}
+      ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
     }`;
 
     const resposeClass = `${this.convertName(node.name.value).replace(/_/g, '')}Response`;
 
     const content = `
-  async def execute_async_${this._get_node_name(node)}(${inputs}) -> ${resposeClass}:
-    async with _get_client_subscriptions() as client:
-      variables = ${variables}
-      generator = client.subscribe(
-          gql(register_ue.__QUERY__),
-          variable_values=variables,
-      )
-      async for response_text in generator:
-          yield ${resposeClass}.from_json(json.dumps(response_text))
+async def execute_async_${this._get_node_name(node)}(${inputSignatures}) -> AsyncGenerator[${resposeClass}, None]:
+  async with _get_client_subscriptions() as client:
+    variables = ${variables}
+    generator = client.subscribe(
+      _gql_${this._get_node_name(node)},
+      variable_values=variables,
+    )
+    async for response_dict in generator:
+        yield from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum]))
 `;
     return [content].filter(a => a).join('\n');
   }
@@ -308,7 +318,7 @@ ${this._gql(node)}
     } else if (isInputObjectType(schemaType)) {
       result = new PythonFieldType({
         baseType: {
-          type: `${this.convertName(schemaType.name)}`,
+          type: `${this._nonScalarPrefix()}${this.convertName(schemaType.name)}`,
           required,
           valueType: false,
         },
@@ -317,7 +327,7 @@ ${this._gql(node)}
     } else if (isEnumType(schemaType)) {
       result = new PythonFieldType({
         baseType: {
-          type: this.convertName(schemaType.name),
+          type: `${this._nonScalarPrefix()}${this.convertName(schemaType.name)}`,
           required,
           valueType: true,
         },
