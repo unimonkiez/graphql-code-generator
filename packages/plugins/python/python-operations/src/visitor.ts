@@ -202,7 +202,7 @@ ${
     variable_values=${variables},
   )`
 }
-  return from_dict(data_class=GetCharactersResponse, data=response_dict)
+  return from_dict(data_class=${resposeClass}, data=response_dict)
 `;
     return [content].filter(a => a).join('\n');
   }
