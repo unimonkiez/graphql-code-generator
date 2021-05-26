@@ -104,7 +104,7 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     const fragments = this._transformFragments(node);
     const doc = this._prepareDocument([print(node), this._includeFragments(fragments)].join('\n'));
 
-    return doc.replace(/"/g, '"""');
+    return doc.replace(/"/g, '\\"');
   }
 
   private _nonScalarPrefix(): string {
@@ -128,8 +128,8 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     return {
       name: name,
       signature: !listType
-        ? `${name}: ${!required ? 'Optional[' : ''}${baseType}${!required ? ']' : ''}`
-        : `${name}: ${baseType}${'[]'.repeat(getListTypeDepth(listType))}`,
+        ? `${name}: ${baseType}${!required ? ' = None' : ''}`
+        : `${name}: ${'List['.repeat(getListTypeDepth(listType))}${baseType}${']'.repeat(getListTypeDepth(listType))}`,
       value: isInputAScalar ? name : `asdict(${name})`,
     };
   }
@@ -187,8 +187,8 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     const hasInputArgs = !!inputs?.length;
     const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
     const variables = `{
-      ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
-    }`;
+    ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
+  }`;
 
     const resposeClass = `${this.convertName(node.name.value).replace(/_/g, '')}Response`;
 
@@ -198,18 +198,19 @@ ${isAsync ? 'async ' : ''}def execute${isAsync ? '_async' : ''}_${this._get_node
     )}(${inputSignatures}) -> ${resposeClass}:
   client = _get_client_${isAsync ? 'async' : 'sync'}()
   variables=${variables}
+  variables_no_none = {k:v for k,v in variables.items() if v is not None}
 ${
   isAsync
     ? `
   response_text_promise = client.execute_async(
     _gql_${this._get_node_name(node)},
-    variable_values=variables,
+    variable_values=variables_no_none,
   )
   response_dict = await response_text_promise`
     : `
   response_dict = client.execute_sync(
     _gql_${this._get_node_name(node)},
-    variable_values=variables,
+    variable_values=variables_no_none,
   )`
 }
   return from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum]))
@@ -257,8 +258,8 @@ ${
     const hasInputArgs = !!inputs?.length;
     const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
     const variables = `{
-      ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
-    }`;
+    ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
+  }`;
 
     const resposeClass = `${this.convertName(node.name.value).replace(/_/g, '')}Response`;
 
@@ -266,9 +267,10 @@ ${
 async def execute_async_${this._get_node_name(node)}(${inputSignatures}) -> AsyncGenerator[${resposeClass}, None]:
   async with _get_client_subscriptions() as client:
     variables = ${variables}
+    variables_no_none = {k:v for k,v in variables.items() if v is not None}
     generator = client.subscribe(
       _gql_${this._get_node_name(node)},
-      variable_values=variables,
+      variable_values=variables_no_none,
     )
     async for response_dict in generator:
         yield from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum]))
