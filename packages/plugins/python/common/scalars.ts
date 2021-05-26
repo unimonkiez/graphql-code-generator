@@ -4,7 +4,6 @@ export const PYTHON_SCALARS = {
   Boolean: 'bool',
   Int: 'int',
   Float: 'float',
-  Date: 'DateTime',
 };
 
 export const pythonNativeValueTypes = [

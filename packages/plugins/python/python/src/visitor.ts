@@ -28,7 +28,7 @@ import {
 } from 'graphql';
 import { PythonOperationVariablesToObject } from '../../common/variables-to-object';
 import { PythonDeclarationBlock, transformPythonComment } from '../../common/declaration-block';
-import { PythonScalars } from './scalars';
+import { PYTHON_SCALARS } from '../../common/scalars';
 
 const flatMap = require('array.prototype.flatmap');
 
@@ -52,10 +52,10 @@ export class PyVisitor<
       },
       {
         ...additionalConfig,
-        scalars: buildScalars(schema, pluginConfig.scalars, PythonScalars, 'Any'),
+        scalars: buildScalars(schema, pluginConfig.scalars, PYTHON_SCALARS, 'Any'),
         typenameAsString: getConfigValue(pluginConfig.typenameAsString, false),
       } as PyParsedConfig,
-      PythonScalars
+      PYTHON_SCALARS
     );
 
     autoBind(this);

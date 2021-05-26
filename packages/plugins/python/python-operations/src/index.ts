@@ -8,35 +8,28 @@ import { PythonOperationsRawPluginConfig } from './config';
 
 const getImports = () => {
   return `
-from typing import Any, Callable, Mapping, List, Optional, Dict
-from dataclasses import dataclass, field
-from dataclasses_json import dataclass_json  # type: ignore
-from gql import Client, WebsocketsTransport, AIOHTTPTransport, gql  # type: ignore
-import json
+from typing import List, Optional
+from dataclasses import dataclass
+from gql import Client, WebsocketsTransport, AIOHTTPTransport, RequestsHTTPTransport, gql
+from dacite import from_dict
 `;
-}
+};
 
-const getClientFunction = (config: PythonOperationsRawPluginConfig) => {
+const getClientFunction = (config: PythonOperationsRawPluginConfig, type: 'sync' | 'async' | 'subscriptions') => {
+  const transportClass =
+    type === 'sync' ? 'RequestsHTTPTransport' : type === 'async' ? 'AIOHTTPTransport' : 'WebsocketsTransport';
   return `
-def _get_client() -> Client:
-transport = AIOHTTPTransport(url=${config.schema})
-client = Client(transport=transport, fetch_schema_from_transport=False)
-return client
+def _get_client_${type}() -> Client:
+  transport = ${transportClass}(url=${type === 'subscriptions' ? config.schemaSubscriptions : config.schema})
+  client = Client(transport=transport, fetch_schema_from_transport=False)
+  return client
 `;
-}
+};
 
-const getClientSubscriptionsFunction = (config: PythonOperationsRawPluginConfig) => {
-  return `
-def _get_client_subscriptions() -> Client:
-transport = WebsocketsTransport(url=${config.schemaSubscriptions})
-client = Client(transport=transport, fetch_schema_from_transport=False)
-return client
-`;
-}
 export const plugin: PluginFunction<PythonOperationsRawPluginConfig> = (
   schema: GraphQLSchema,
   documents: Types.DocumentFile[],
-  config,
+  config
 ) => {
   const allAst = concatAST(documents.map(v => v.document));
   const allFragments: LoadedFragment[] = [
@@ -57,8 +50,9 @@ export const plugin: PluginFunction<PythonOperationsRawPluginConfig> = (
     prepend: [],
     content: [
       getImports(),
-      getClientFunction(config),
-      getClientSubscriptionsFunction(config),
+      getClientFunction(config, 'sync'),
+      getClientFunction(config, 'async'),
+      getClientFunction(config, 'subscriptions'),
       ...visitorResult.definitions.filter(t => typeof t === 'string'),
     ]
       .filter(a => a)

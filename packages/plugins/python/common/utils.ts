@@ -1,7 +1,7 @@
 import { Kind, TypeNode, StringValueNode } from 'graphql';
 import { indent } from '@graphql-codegen/visitor-plugin-common';
 import { pythonNativeValueTypes } from './scalars';
-import { ListTypeField, CSharpFieldType } from './c-sharp-field-types';
+import { ListTypeField, PythonFieldType } from './python-field-types';
 
 export function buildPackageNameFromPath(path: string): string {
   const unixify = require('unixify');
@@ -17,10 +17,7 @@ export function transformComment(comment: string | StringValueNode, indentLevel 
   if (isStringValueNode(comment)) {
     comment = comment.value;
   }
-  comment = comment
-    .trimStart()
-    .split('*/')
-    .join('*\\/');
+  comment = comment.trimStart().split('*/').join('*\\/');
   let lines = comment.split('\n');
   lines = ['/// <summary>', ...lines.map(line => `/// ${line}`), '/// </summary>'];
   return lines
@@ -75,13 +72,13 @@ export function getListInnerTypeNode(typeNode: TypeNode): TypeNode {
 }
 
 export function wrapFieldType(
-  fieldType: CSharpFieldType,
+  fieldType: PythonFieldType,
   listTypeField?: ListTypeField,
   listType = 'IEnumerable'
 ): string {
   if (listTypeField) {
     const innerType = wrapFieldType(fieldType, listTypeField.type, listType);
-    return `${listType}<${innerType}>`;
+    return `${listType}[${innerType}]`;
   } else {
     return fieldType.innerTypeName;
   }
