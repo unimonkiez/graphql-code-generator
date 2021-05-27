@@ -1,0 +1,25 @@
+{
+  "name": "@graphql-codegen/python-operations",
+  "version": "1.16.0",
+  "description": "GraphQL Code Generator plugin for generating ready-to-use Angular Components based on GraphQL operations",
+  "sideEffects": false,
+  "peerDependencies": {
+    "graphql": "^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0",
+    "graphql-tag": "2.10.3"
+  },
+  "dependencies": {
+    "@graphql-codegen/plugin-helpers": "1.16.0",
+    "@graphql-codegen/visitor-plugin-common": "1.16.0",
+    "auto-bind": "4.0.0",
+    "camel-case": "4.1.1",
+    "tslib": "2.0.0"
+  },
+  "repository": "git@github.com:dotansimha/graphql-code-generator.git",
+  "license": "MIT",
+  "main": "index.cjs.js",
+  "module": "index.esm.js",
+  "typings": "index.d.ts",
+  "typescript": {
+    "definition": "index.d.ts"
+  }
+}
