@@ -360,24 +360,21 @@ ${this._gql(node)}
   ): string {
     switch (node.kind) {
       case Kind.OPERATION_DEFINITION: {
-        return `@dataclass
-${
-  new PythonDeclarationBlock({})
-    .export()
-    .asKind('class')
-    .withName(`${this.convertName(prepend).replace(/_/g, '')}Response`)
-    .withBlock(
-      '\n' +
-        node.selectionSet.selections
-          .map(opr => {
-            if (opr.kind !== Kind.FIELD) {
-              throw new Error(`Unknown kind; ${opr.kind} in OperationDefinitionNode`);
-            }
-            return this._getResponseFieldRecursive(opr, parentSchema);
-          })
-          .join('\n')
-    ).string
-}`;
+        return new PythonDeclarationBlock({})
+          .export()
+          .asKind('class')
+          .withDecorator('@dataclass')
+          .withName(`${this.convertName(prepend).replace(/_/g, '')}Response`)
+          .withBlock(
+            node.selectionSet.selections
+              .map(opr => {
+                if (opr.kind !== Kind.FIELD) {
+                  throw new Error(`Unknown kind; ${opr.kind} in OperationDefinitionNode`);
+                }
+                return this._getResponseFieldRecursive(opr, parentSchema);
+              })
+              .join('\n')
+          ).string;
       }
       case Kind.FIELD: {
         const fieldSchema = parentSchema.fields.find(f => f.name.value === node.name.value);
@@ -389,7 +386,6 @@ ${
         if (!node.selectionSet) {
           const responseTypeName = wrapFieldType(responseType, responseType.listType, 'List');
           return indentMultiline([`${node.name.value}: ${responseTypeName}`].join('\n') + '\n');
-          // } else if (node) {
         } else {
           const selectionBaseTypeName = `${responseType.baseType.type}Selection`;
           const selectionType = Object.assign(new PythonFieldType(responseType), {
@@ -399,33 +395,71 @@ ${
           const innerClassSchema = this._schemaAST.definitions.find(
             d => d.kind === Kind.OBJECT_TYPE_DEFINITION && d.name.value === responseType.baseType.type
           ) as ObjectTypeDefinitionNode;
-
-          const innerClassDefinition = new PythonDeclarationBlock({})
-            .asKind('class')
-            .withName(selectionBaseTypeName)
-            .withBlock(
-              '\n' +
+          const fragmentTypes: string[] = [Kind.FRAGMENT_SPREAD, Kind.INLINE_FRAGMENT];
+          const isSomeChildFragments = node.selectionSet.selections.some(s => fragmentTypes.indexOf(s.kind) !== -1);
+          if (isSomeChildFragments) {
+            const isAllFragmentSpread = node.selectionSet.selections.every(s => fragmentTypes.indexOf(s.kind) !== -1);
+            if (!isAllFragmentSpread) {
+              throw new Error(
+                `All selections under spread need to be fields or fragments, can't be both - under "${node.name}".`
+              );
+            }
+            return indentMultiline(
+              [
+                ...node.selectionSet.selections.map(s => {
+                  return this._getResponseFieldRecursive(s, innerClassSchema);
+                }),
+                `${node.name.value}: Union[${node.selectionSet.selections
+                  .map(s => {
+                    if (s.kind === Kind.INLINE_FRAGMENT) {
+                      return s.typeCondition?.name.value;
+                    } else if (s.kind === Kind.FRAGMENT_SPREAD) {
+                      return s.name.value;
+                    }
+                    throw Error('But checked before...');
+                  })
+                  .join(', ')}]`,
+              ].join('\n')
+            );
+          } else {
+            const innerClassDefinition = new PythonDeclarationBlock({})
+              .asKind('class')
+              .withDecorator('@dataclass')
+              .withName(selectionBaseTypeName)
+              .withBlock(
                 node.selectionSet.selections
                   .map(s => {
                     return this._getResponseFieldRecursive(s, innerClassSchema);
                   })
                   .join('\n')
-            ).string;
-          return indentMultiline(
-            ['@dataclass', innerClassDefinition, `${node.name.value}: ${selectionTypeName}`].join('\n') + '\n'
-          );
+              ).string;
+            return indentMultiline([innerClassDefinition, `${node.name.value}: ${selectionTypeName}`].join('\n'));
+          }
         }
       }
       case Kind.FRAGMENT_SPREAD: {
         const fragmentSchema = this._fragments.find(f => f.name === node.name.value);
         if (!fragmentSchema) {
-          throw new Error(`Fragment schema not found; ${node.name.value}`);
+          throw new Error(`Fragment schema not found: ${node.name.value}`);
         }
-        return fragmentSchema.node.selectionSet.selections
-          .map(s => {
-            return this._getResponseFieldRecursive(s, parentSchema);
-          })
-          .join('\n');
+        const fragmentParentSchema = this._schemaAST.definitions.find(
+          s => s.kind === Kind.OBJECT_TYPE_DEFINITION && s.name.value === fragmentSchema.node.typeCondition.name.value
+        ) as ObjectTypeDefinitionNode | undefined;
+        if (!fragmentParentSchema) {
+          throw new Error(`Fragment schema not found: ${fragmentSchema.node.typeCondition.name.value}`);
+        }
+        const innerClassDefinition = new PythonDeclarationBlock({})
+          .asKind('class')
+          .withDecorator('@dataclass')
+          .withName(node.name.value)
+          .withBlock(
+            fragmentSchema.node.selectionSet.selections
+              .map(s => {
+                return this._getResponseFieldRecursive(s, fragmentParentSchema);
+              })
+              .join('\n')
+          ).string;
+        return innerClassDefinition;
       }
       case Kind.INLINE_FRAGMENT: {
         const fragmentSchemaName = node.typeCondition!.name.value;
@@ -438,6 +472,7 @@ ${
 
         const innerClassDefinition = new PythonDeclarationBlock({})
           .asKind('class')
+          .withDecorator('@dataclass')
           .withName(fragmentSchemaName)
           .withBlock(
             '\n' +
@@ -447,7 +482,7 @@ ${
                 })
                 .join('\n')
           ).string;
-        return indentMultiline(['@dataclass', innerClassDefinition].join('\n') + '\n');
+        return innerClassDefinition + '\n';
       }
     }
   }
