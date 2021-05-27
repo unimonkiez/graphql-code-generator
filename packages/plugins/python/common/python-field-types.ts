@@ -23,7 +23,7 @@ export class PythonFieldType implements PythonField {
   }
 
   get innerTypeName(): string {
-    const nullable = !this.baseType.required;
+    const nullable = this.baseType.valueType && !this.baseType.required;
     return `${nullable ? 'Optional[' : ''}${this.baseType.type}${nullable ? ']' : ''}`;
   }
 
