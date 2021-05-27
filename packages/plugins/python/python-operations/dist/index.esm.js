@@ -163,7 +163,7 @@ class PythonFieldType {
         Object.assign(this, fieldType);
     }
     get innerTypeName() {
-        const nullable = !this.baseType.required;
+        const nullable = this.baseType.valueType && !this.baseType.required;
         return `${nullable ? 'Optional[' : ''}${this.baseType.type}${nullable ? ']' : ''}`;
     }
     get isOuterTypeRequired() {
