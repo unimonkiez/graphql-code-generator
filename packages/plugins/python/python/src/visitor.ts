@@ -43,7 +43,6 @@ export class PyVisitor<
   PyRawConfig extends PythonPluginConfig = PythonPluginConfig,
   PyParsedConfig extends PythonPluginParsedConfig = PythonPluginParsedConfig
 > extends BaseTypesVisitor<PyRawConfig, PyParsedConfig> {
-  
   private readonly keywords = new Set(csharpKeywords);
 
   constructor(schema: GraphQLSchema, pluginConfig: PyRawConfig, additionalConfig: Partial<PyParsedConfig> = {}) {
@@ -83,12 +82,10 @@ export class PyVisitor<
     });
   }
 
-
   private convertSafeName(node: NameNode | string): string {
     const name = typeof node === 'string' ? node : node.value;
     return this.keywords.has(name) ? `_${name}` : name;
   }
-
 
   public getWrapperDefinitions(): string[] {
     return [];
@@ -136,10 +133,7 @@ export class PyVisitor<
   protected _getTypeForNode(node: NamedTypeNode): string {
     const typeAsString = (node.name as any) as string;
 
-
-
     if (this.scalars[typeAsString] || this.config.enumValues[typeAsString]) {
-
       return super._getTypeForNode(node);
     } else {
       return `"__GQL_CODEGEN_${super._getTypeForNode(node)}__"`;
@@ -147,16 +141,12 @@ export class PyVisitor<
   }
 
   NamedType(node: NamedTypeNode, key, parent, path, ancestors): string {
+    const name = super.NamedType(node, key, parent, path, ancestors);
 
-
-
-    const name = super.NamedType(node, key, parent, path, ancestors)
-
-    return `Optional[${name.includes("__GQL_CODEGEN") ? name : `"${name}"`}]`;
+    return `Optional[${name.includes('__GQL_CODEGEN') ? name : `"${name}"`}]`;
   }
 
   ListType(node: ListTypeNode): string {
-    
     return `Optional[${super.ListType(node)}]`;
   }
 
@@ -185,9 +175,6 @@ export class PyVisitor<
 
       allFields.unshift(indent(`__typename: ${type}`));
     }
-
-
-
 
     const interfacesNames = originalNode.interfaces ? originalNode.interfaces.map(i => this.convertName(i)) : [];
 
@@ -219,7 +206,11 @@ export class PyVisitor<
 
     return (
       comment +
-      indent(`${this.config.immutableTypes ? 'readonly ' : ''}${node.name}: ${typeString}${this.getPunctuation(type)}`)
+      indent(
+        `${this.config.immutableTypes ? 'readonly ' : ''}${this.convertSafeName(
+          node.name
+        )}: ${typeString}${this.getPunctuation(type)}`
+      )
     );
   }
 
@@ -238,7 +229,6 @@ export class PyVisitor<
     name: string,
     field: FieldDefinitionNode
   ): DeclarationBlock {
-
     return new PythonDeclarationBlock(this._declarationBlockConfig)
       .export()
       .asKind(this._parsedConfig.declarationKind.arguments)
@@ -261,7 +251,7 @@ export class PyVisitor<
   InputValueDefinition(node: InputValueDefinitionNode): string {
     const comment = transformPythonComment(node.description, 1);
 
-    return comment + indent(`${this.convertSafeName( node.name )}: ${node.type}`);
+    return comment + indent(`${this.convertSafeName(node.name)}: ${node.type}`);
   }
 
   protected buildEnumValuesBlock(typeName: string, values: ReadonlyArray<EnumValueDefinitionNode>) {
