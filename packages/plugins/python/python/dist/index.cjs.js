@@ -298,7 +298,7 @@ class PyVisitor extends visitorPluginCommon.BaseTypesVisitor {
     }
     NamedType(node, key, parent, path, ancestors) {
         const name = super.NamedType(node, key, parent, path, ancestors);
-        return `Optional[${name.includes("__GQL_CODEGEN") ? name : `"${name}"`}]`;
+        return `Optional[${name.includes('__GQL_CODEGEN') ? name : `"${name}"`}]`;
     }
     ListType(node) {
         return `Optional[${super.ListType(node)}]`;
@@ -343,7 +343,7 @@ class PyVisitor extends visitorPluginCommon.BaseTypesVisitor {
         const comment = this.getFieldComment(node);
         const { type } = this.config.declarationKind;
         return (comment +
-            visitorPluginCommon.indent(`${this.config.immutableTypes ? 'readonly ' : ''}${node.name}: ${typeString}${this.getPunctuation(type)}`));
+            visitorPluginCommon.indent(`${this.config.immutableTypes ? 'readonly ' : ''}${this.convertSafeName(node.name)}: ${typeString}${this.getPunctuation(type)}`));
     }
     getInputObjectDeclarationBlock(node) {
         return new PythonDeclarationBlock(this._declarationBlockConfig)
