@@ -143,6 +143,7 @@ const csharpKeywords = [
     'or',
     'not',
     'from',
+    'None',
     'base',
     'bool',
     'break',
