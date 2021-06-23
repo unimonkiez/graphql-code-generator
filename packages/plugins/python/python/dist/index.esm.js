@@ -386,7 +386,7 @@ class PyVisitor extends BaseTypesVisitor {
                 enumValue = this.config.enumValues[typeName].mappedValues[enumValue];
             }
             return (comment +
-                indent(`${optionName}${this._declarationBlockConfig.enumNameValueSeparator} ${wrapWithSingleQuotes(enumValue)}`));
+                indent(`${this.convertSafeName(optionName)}${this._declarationBlockConfig.enumNameValueSeparator} ${wrapWithSingleQuotes(enumValue)}`));
         })
             .join('\n');
     }
