@@ -2,12 +2,13 @@
  * C# keywords
  * https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/
  */
- export const csharpKeywords = [
+export const csharpKeywords = [
   'abstract',
   'as',
   'and',
   'or',
   'not',
+  'from',
   'base',
   'bool',
   'break',
