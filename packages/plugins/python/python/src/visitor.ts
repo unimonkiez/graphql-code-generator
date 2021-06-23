@@ -25,10 +25,12 @@ import {
   InterfaceTypeDefinitionNode,
   InputObjectTypeDefinitionNode,
   InputValueDefinitionNode,
+  NameNode,
 } from 'graphql';
 import { PythonOperationVariablesToObject } from '../../common/variables-to-object';
 import { PythonDeclarationBlock, transformPythonComment } from '../../common/declaration-block';
 import { PYTHON_SCALARS } from '../../common/scalars';
+import { csharpKeywords } from '../../common/keywords';
 
 const flatMap = require('array.prototype.flatmap');
 
@@ -41,6 +43,9 @@ export class PyVisitor<
   PyRawConfig extends PythonPluginConfig = PythonPluginConfig,
   PyParsedConfig extends PythonPluginParsedConfig = PythonPluginParsedConfig
 > extends BaseTypesVisitor<PyRawConfig, PyParsedConfig> {
+  
+  private readonly keywords = new Set(csharpKeywords);
+
   constructor(schema: GraphQLSchema, pluginConfig: PyRawConfig, additionalConfig: Partial<PyParsedConfig> = {}) {
     super(
       schema,
@@ -78,6 +83,13 @@ export class PyVisitor<
     });
   }
 
+
+  private convertSafeName(node: NameNode | string): string {
+    const name = typeof node === 'string' ? node : node.value;
+    return this.keywords.has(name) ? `_${name}` : name;
+  }
+
+
   public getWrapperDefinitions(): string[] {
     return [];
   }
@@ -100,7 +112,7 @@ export class PyVisitor<
       const scalarType = this._schema.getType(scalarName);
       const comment =
         scalarType && scalarType.astNode && scalarType.description
-          ? transformPythonComment(scalarType.description, 1)
+          ? transformPythonComment(scalarType.description, 0)
           : '';
 
       return comment + `Scalar${scalarName} = ${scalarValue}`;
@@ -124,7 +136,10 @@ export class PyVisitor<
   protected _getTypeForNode(node: NamedTypeNode): string {
     const typeAsString = (node.name as any) as string;
 
+
+
     if (this.scalars[typeAsString] || this.config.enumValues[typeAsString]) {
+
       return super._getTypeForNode(node);
     } else {
       return `"__GQL_CODEGEN_${super._getTypeForNode(node)}__"`;
@@ -132,10 +147,16 @@ export class PyVisitor<
   }
 
   NamedType(node: NamedTypeNode, key, parent, path, ancestors): string {
-    return `Optional[${super.NamedType(node, key, parent, path, ancestors)}]`;
+
+
+
+    const name = super.NamedType(node, key, parent, path, ancestors)
+
+    return `Optional[${name.includes("__GQL_CODEGEN") ? name : `"${name}"`}]`;
   }
 
   ListType(node: ListTypeNode): string {
+    
     return `Optional[${super.ListType(node)}]`;
   }
 
@@ -159,10 +180,14 @@ export class PyVisitor<
     if (this.config.addTypename) {
       const typename = node.name;
       const typeString = this.config.typenameAsString ? 'Scalars.String' : `Literal["${typename}"]`;
+
       const type = this.config.nonOptionalTypename ? typeString : `Optional[${typeString}]`;
 
       allFields.unshift(indent(`__typename: ${type}`));
     }
+
+
+
 
     const interfacesNames = originalNode.interfaces ? originalNode.interfaces.map(i => this.convertName(i)) : [];
 
@@ -213,6 +238,7 @@ export class PyVisitor<
     name: string,
     field: FieldDefinitionNode
   ): DeclarationBlock {
+
     return new PythonDeclarationBlock(this._declarationBlockConfig)
       .export()
       .asKind(this._parsedConfig.declarationKind.arguments)
@@ -235,7 +261,7 @@ export class PyVisitor<
   InputValueDefinition(node: InputValueDefinitionNode): string {
     const comment = transformPythonComment(node.description, 1);
 
-    return comment + indent(`${node.name}: ${node.type}`);
+    return comment + indent(`${this.convertSafeName( node.name )}: ${node.type}`);
   }
 
   protected buildEnumValuesBlock(typeName: string, values: ReadonlyArray<EnumValueDefinitionNode>) {

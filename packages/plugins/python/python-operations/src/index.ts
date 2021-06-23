@@ -11,7 +11,10 @@ const getImports = () => {
 from typing import List, Optional, Union, AsyncGenerator
 from dataclasses import dataclass
 from dataclasses import asdict
-from gql import Client, WebsocketsTransport, AIOHTTPTransport, RequestsHTTPTransport, gql
+from gql import Client, gql
+from gql.transport.websockets import WebsocketsTransport
+from gql.transport.aiohttp import AIOHTTPTransport
+from gql.transport.requests import RequestsHTTPTransport
 from dacite import from_dict, Config
 from enum import Enum
 `;
