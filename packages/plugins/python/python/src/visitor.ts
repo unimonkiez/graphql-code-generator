@@ -275,7 +275,9 @@ export class PyVisitor<
         return (
           comment +
           indent(
-            `${optionName}${this._declarationBlockConfig.enumNameValueSeparator} ${wrapWithSingleQuotes(enumValue)}`
+            `${this.convertSafeName(optionName)}${
+              this._declarationBlockConfig.enumNameValueSeparator
+            } ${wrapWithSingleQuotes(enumValue)}`
           )
         );
       })
