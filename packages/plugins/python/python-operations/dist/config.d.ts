@@ -58,4 +58,26 @@ export interface PythonOperationsRawPluginConfig extends RawClientSideBasePlugin
    * ```
    */
   schemaSubscriptions: string;
+  /**
+   * @description Allows to define a custom header to send with the request
+   * @default Same from codegen.yml
+   *
+   * @exampleMarkdown
+   * ```yml
+   * config:
+   *   headerNameOverride: "X-AUTH"
+   * ```
+   */
+  headerName: string;
+  /**
+   * @description Allows to define a custom header value to send with the request
+   * @default Same from codegen.yml
+   *
+   * @exampleMarkdown
+   * ```yml
+   * config:
+   *   headerValueOverride: "X-AUTH"
+   * ```
+   */
+  headerValue: string;
 }

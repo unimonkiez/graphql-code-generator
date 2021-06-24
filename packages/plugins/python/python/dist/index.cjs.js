@@ -320,7 +320,7 @@ class PyVisitor extends visitorPluginCommon.BaseTypesVisitor {
             const type = this.config.nonOptionalTypename ? typeString : `Optional[${typeString}]`;
             allFields.unshift(visitorPluginCommon.indent(`__typename: ${type}`));
         }
-        const interfacesNames = originalNode.interfaces ? originalNode.interfaces.map(i => this.convertName(i)) : [];
+        const interfacesNames = []; // originalNode.interfaces ? originalNode.interfaces.map(i => this.convertName(i)) : [];
         const declarationBlock = new PythonDeclarationBlock({
             ...this._declarationBlockConfig,
         })
