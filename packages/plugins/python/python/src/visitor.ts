@@ -176,7 +176,7 @@ export class PyVisitor<
       allFields.unshift(indent(`__typename: ${type}`));
     }
 
-    const interfacesNames = originalNode.interfaces ? originalNode.interfaces.map(i => this.convertName(i)) : [];
+    const interfacesNames = []; // originalNode.interfaces ? originalNode.interfaces.map(i => this.convertName(i)) : [];
 
     const declarationBlock = new PythonDeclarationBlock({
       ...this._declarationBlockConfig,

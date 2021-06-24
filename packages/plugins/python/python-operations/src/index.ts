@@ -25,7 +25,11 @@ const getClientFunction = (config: PythonOperationsRawPluginConfig, type: 'sync'
     type === 'sync' ? 'RequestsHTTPTransport' : type === 'async' ? 'AIOHTTPTransport' : 'WebsocketsTransport';
   return `
 def _get_client_${type}() -> Client:
-  transport = ${transportClass}(url=${type === 'subscriptions' ? config.schemaSubscriptions : config.schema})
+  transport = ${transportClass}(url=${
+    type === 'subscriptions' ? config.schemaSubscriptions : config.schema
+  }, headers={${
+    config.headerName !== undefined && config.headerName !== '' ? `${config.headerName}: ${config.headerValue}` : ``
+  }})
   client = Client(transport=transport, fetch_schema_from_transport=False)
   return client
 `;
