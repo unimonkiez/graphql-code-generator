@@ -213,7 +213,7 @@ ${
     variable_values=variables_no_none,
   )`
 }
-  return from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum]))
+  return from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
 `;
     return [content].filter(a => a).join('\n');
   }
@@ -273,7 +273,7 @@ async def execute_async_${this._get_node_name(node)}(${inputSignatures}) -> Asyn
       variable_values=variables_no_none,
     )
     async for response_dict in generator:
-        yield from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum]))
+        yield from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
 `;
     return [content].filter(a => a).join('\n');
   }
