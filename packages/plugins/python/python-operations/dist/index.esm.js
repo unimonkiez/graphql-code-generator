@@ -451,13 +451,20 @@ ${this._gql(node)}
                         baseType: { type: selectionBaseTypeName },
                     });
                     const selectionTypeName = wrapFieldType(selectionType, selectionType.listType, 'List');
-                    const innerClassSchema = this._schemaAST.definitions.find(d => d.kind === Kind.OBJECT_TYPE_DEFINITION && d.name.value === responseType.baseType.type);
+                    const innerClassSchema = this._schemaAST.definitions.find(d => {
+                        return ((d.kind === Kind.OBJECT_TYPE_DEFINITION || d.kind === Kind.INTERFACE_TYPE_DEFINITION) &&
+                            d.name.value === responseType.baseType.type);
+                    });
+                    if (!innerClassSchema) {
+                        throw new Error(`innerClassSchema not found: ${node.name.value}, schema: ${innerClassSchema}, opr.kind: ${node.kind}`);
+                    }
                     const fragmentTypes = [Kind.FRAGMENT_SPREAD, Kind.INLINE_FRAGMENT];
                     const isSomeChildFragments = node.selectionSet.selections.some(s => fragmentTypes.indexOf(s.kind) !== -1);
                     if (isSomeChildFragments) {
                         const isAllFragmentSpread = node.selectionSet.selections.every(s => fragmentTypes.indexOf(s.kind) !== -1);
+                        const mapSpread = node.selectionSet.selections.map(s => s.kind);
                         if (!isAllFragmentSpread) {
-                            throw new Error(`All selections under spread need to be fields or fragments, can't be both - under "${node.name}".`);
+                            throw new Error(`All selections under spread need to be fields or fragments, can't be both - under "${node.name}", node kind: "${node.kind}", selectionTypeName: "${selectionTypeName}", mapSpread: "${mapSpread}" .`);
                         }
                         return indentMultiline([
                             ...node.selectionSet.selections.map(s => {
