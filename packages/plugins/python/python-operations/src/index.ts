@@ -17,6 +17,20 @@ from gql.transport.aiohttp import AIOHTTPTransport
 from gql.transport.requests import RequestsHTTPTransport
 from dacite import from_dict, Config
 from enum import Enum
+
+def remove_empty(dict_or_list):
+    if isinstance(dict_or_list, dict):
+        for key, value in dict_or_list.items():
+            dict_or_list[key] = remove_empty(value)
+        return dict_or_list
+    elif isinstance(dict_or_list, list):
+        for count, object_in_list in enumerate(dict_or_list):
+            if object_in_list == {} or object_in_list == [] or object_in_list == None:
+                del dict_or_list[count]
+        return dict_or_list
+    else:
+        return dict_or_list
+
 `;
 };
 

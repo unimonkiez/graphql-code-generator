@@ -213,6 +213,10 @@ ${
     variable_values=variables_no_none,
   )`
 }
+
+
+
+  response_dict = remove_empty(response_dict)
   return from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
 `;
     return [content].filter(a => a).join('\n');
@@ -409,30 +413,39 @@ ${this._gql(node)}
           const fragmentTypes: string[] = [Kind.FRAGMENT_SPREAD, Kind.INLINE_FRAGMENT];
           const isSomeChildFragments = node.selectionSet.selections.some(s => fragmentTypes.indexOf(s.kind) !== -1);
           if (isSomeChildFragments) {
-            const isAllFragmentSpread = node.selectionSet.selections.every(s => fragmentTypes.indexOf(s.kind) !== -1);
-            const mapSpread = node.selectionSet.selections.map(s => s.kind);
-            if (!isAllFragmentSpread) {
-              throw new Error(
-                `All selections under spread need to be fields or fragments, can't be both - under "${node.name}", node kind: "${node.kind}", selectionTypeName: "${selectionTypeName}", mapSpread: "${mapSpread}" .`
-              );
-            }
-            return indentMultiline(
+            // const isAllFragmentSpread = node.selectionSet.selections.every(s => fragmentTypes.indexOf(s.kind) !== -1);
+            // const mapSpread = node.selectionSet.selections.map(s => s.kind);
+            // if (!isAllFragmentSpread) {
+            //   throw new Error(
+            //     `All selections under spread need to be fields or fragments, can't be both - under "${node.name}", node kind: "${node.kind}", selectionTypeName: "${selectionTypeName}", mapSpread: "${mapSpread}" .`
+            //   );
+            // }
+            const ret2 = [
+              ...node.selectionSet.selections.map(s => {
+                return this._getResponseFieldRecursive(s, innerClassSchema);
+              }),
+            ];
+
+            const ret = indentMultiline(
               [
+                //  innerClassDefinition,
                 ...node.selectionSet.selections.map(s => {
                   return this._getResponseFieldRecursive(s, innerClassSchema);
                 }),
-                `${node.name.value}: Union[${node.selectionSet.selections
+                `${node.name.value}: List[Union[${node.selectionSet.selections
                   .map(s => {
                     if (s.kind === Kind.INLINE_FRAGMENT) {
                       return s.typeCondition?.name.value;
                     } else if (s.kind === Kind.FRAGMENT_SPREAD) {
                       return s.name.value;
                     }
-                    throw Error('But checked before...');
+                    return s.name.value;
+                    // throw Error('But checked before...');
                   })
-                  .join(', ')}]`,
+                  .join(', ')}]]`,
               ].join('\n')
             );
+            return ret;
           } else {
             const innerClassDefinition = new PythonDeclarationBlock({})
               .asKind('class')
