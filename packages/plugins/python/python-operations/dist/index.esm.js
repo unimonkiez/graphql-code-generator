@@ -546,8 +546,14 @@ ${this._gql(node)}
                         block +
                             '\n' +
                             addField
-                                .map(s => {
-                                return this._getResponseFieldRecursive(s, fragmentSchema, false);
+                                .flatMap(s => {
+                                return s.kind === Kind.FIELD &&
+                                    node.selectionSet.selections
+                                        .filter(s => s.kind === Kind.FIELD)
+                                        .map((s) => s.name.value)
+                                        .includes(s.name.value)
+                                    ? []
+                                    : this._getResponseFieldRecursive(s, fragmentSchema, false);
                             })
                                 .join('\n');
                 }
