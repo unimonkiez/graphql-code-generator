@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import {
   ClientSideBaseVisitor,
   ClientSideBasePluginConfig,
@@ -214,8 +215,6 @@ ${
   )`
 }
 
-
-
   response_dict = remove_empty(response_dict)
   return from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
 `;
@@ -364,7 +363,7 @@ ${this._gql(node)}
     parentSchema: ObjectTypeDefinitionNode,
     fieldAsFragment: boolean,
     prepend?: string,
-    addField?: string[]
+    addField?: FieldNode[]
   ): string {
     switch (node.kind) {
       case Kind.OPERATION_DEFINITION: {
@@ -421,11 +420,7 @@ ${this._gql(node)}
           const fragmentTypes: string[] = [Kind.FRAGMENT_SPREAD, Kind.INLINE_FRAGMENT];
           const isSomeChildFragments = node.selectionSet.selections.some(s => fragmentTypes.indexOf(s.kind) !== -1);
 
-          const nonFragmentChilds = node.selectionSet.selections
-            .flatMap(s => (s.kind !== Kind.FIELD ? [] : s))
-            .map(s => {
-              return s.name.value;
-            });
+          const nonFragmentChilds = node.selectionSet.selections.flatMap(s => (s.kind !== Kind.FIELD ? [] : s));
 
           if (isSomeChildFragments) {
             const ret = indentMultiline(
@@ -463,21 +458,8 @@ ${this._gql(node)}
                     .join('\n')
                 ).string;
               return indentMultiline([innerClassDefinition, `${node.name.value}: ${selectionTypeName}`].join('\n'));
-            } else {
-              const innerClassDefinition = new PythonDeclarationBlock({})
-                .asKind('class')
-                .withDecorator('@dataclass')
-                .withName(node.name.value)
-                .withBlock(
-                  '\n' +
-                    node.selectionSet.selections
-                      .map(s => {
-                        return this._getResponseFieldRecursive(s, innerClassSchema, false);
-                      })
-                      .join('\n')
-                ).string;
-              return innerClassDefinition + '\n';
             }
+            return '';
           }
         }
       }
@@ -528,7 +510,7 @@ ${this._gql(node)}
             '\n' +
             addField
               .map(s => {
-                return indentMultiline([`${s}: any`].join('\n'));
+                return this._getResponseFieldRecursive(s, fragmentSchema, false);
               })
               .join('\n');
         }
