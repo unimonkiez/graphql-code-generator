@@ -288,8 +288,11 @@ ${isAsync
     _gql_${this._get_node_name(node)},
     variable_values=variables_no_none,
   )`}
+
+  response_dict = remove_empty(response_dict)
   return from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
 `;
+        // {"researchBox": GetDatapointResponse.researchBox}
         return [content].filter(a => a).join('\n');
     }
     getExecuteFunctionSubscriptions(node) {
@@ -418,7 +421,7 @@ ${this._gql(node)}
         }
         return result;
     }
-    _getResponseFieldRecursive(node, parentSchema, prepend) {
+    _getResponseFieldRecursive(node, parentSchema, fieldAsFragment, prepend, addField) {
         switch (node.kind) {
             case Kind.OPERATION_DEFINITION: {
                 return new PythonDeclarationBlock({})
@@ -431,7 +434,7 @@ ${this._gql(node)}
                     if (opr.kind !== Kind.FIELD) {
                         throw new Error(`Unknown kind; ${opr.kind} in OperationDefinitionNode`);
                     }
-                    return this._getResponseFieldRecursive(opr, parentSchema);
+                    return this._getResponseFieldRecursive(opr, parentSchema, false);
                 })
                     .join('\n')).string;
             }
@@ -443,7 +446,12 @@ ${this._gql(node)}
                 const responseType = this.resolveFieldType(fieldSchema.type);
                 if (!node.selectionSet) {
                     const responseTypeName = wrapFieldType(responseType, responseType.listType, 'List');
-                    return indentMultiline([`${node.name.value}: ${responseTypeName}`].join('\n') + '\n');
+                    if (!fieldAsFragment) {
+                        return indentMultiline([`${node.name.value}: "${responseTypeName}"`].join('\n') + '\n');
+                    }
+                    else {
+                        return ''; // `${node.name.value}: "${responseTypeName}"` + '\n';
+                    }
                 }
                 else {
                     const selectionBaseTypeName = `${responseType.baseType.type}Selection`;
@@ -460,17 +468,15 @@ ${this._gql(node)}
                     }
                     const fragmentTypes = [Kind.FRAGMENT_SPREAD, Kind.INLINE_FRAGMENT];
                     const isSomeChildFragments = node.selectionSet.selections.some(s => fragmentTypes.indexOf(s.kind) !== -1);
+                    const nonFragmentChilds = node.selectionSet.selections.flatMap(s => (s.kind !== Kind.FIELD ? [] : s));
                     if (isSomeChildFragments) {
-                        const isAllFragmentSpread = node.selectionSet.selections.every(s => fragmentTypes.indexOf(s.kind) !== -1);
-                        const mapSpread = node.selectionSet.selections.map(s => s.kind);
-                        if (!isAllFragmentSpread) {
-                            throw new Error(`All selections under spread need to be fields or fragments, can't be both - under "${node.name}", node kind: "${node.kind}", selectionTypeName: "${selectionTypeName}", mapSpread: "${mapSpread}" .`);
-                        }
-                        return indentMultiline([
+                        const ret = indentMultiline([
+                            //  innerClassDefinition,
                             ...node.selectionSet.selections.map(s => {
-                                return this._getResponseFieldRecursive(s, innerClassSchema);
+                                return this._getResponseFieldRecursive(s, innerClassSchema, true, undefined, nonFragmentChilds);
                             }),
-                            `${node.name.value}: Union[${node.selectionSet.selections
+                            `${node.name.value}: List[Union[${node.selectionSet.selections
+                                .flatMap(s => (s.kind === Kind.FIELD ? [] : s))
                                 .map(s => {
                                 var _a;
                                 if (s.kind === Kind.INLINE_FRAGMENT) {
@@ -479,22 +485,27 @@ ${this._gql(node)}
                                 else if (s.kind === Kind.FRAGMENT_SPREAD) {
                                     return s.name.value;
                                 }
-                                throw Error('But checked before...');
+                                //return s.name.value;
+                                throw Error('Unknown Type');
                             })
-                                .join(', ')}]`,
+                                .join(', ')}]]`,
                         ].join('\n'));
+                        return ret;
                     }
                     else {
-                        const innerClassDefinition = new PythonDeclarationBlock({})
-                            .asKind('class')
-                            .withDecorator('@dataclass')
-                            .withName(selectionBaseTypeName)
-                            .withBlock(node.selectionSet.selections
-                            .map(s => {
-                            return this._getResponseFieldRecursive(s, innerClassSchema);
-                        })
-                            .join('\n')).string;
-                        return indentMultiline([innerClassDefinition, `${node.name.value}: ${selectionTypeName}`].join('\n'));
+                        if (!fieldAsFragment) {
+                            const innerClassDefinition = new PythonDeclarationBlock({})
+                                .asKind('class')
+                                .withDecorator('@dataclass')
+                                .withName(selectionBaseTypeName)
+                                .withBlock(node.selectionSet.selections
+                                .map(s => {
+                                return this._getResponseFieldRecursive(s, innerClassSchema, false);
+                            })
+                                .join('\n')).string;
+                            return indentMultiline([innerClassDefinition, `${node.name.value}: ${selectionTypeName}`].join('\n'));
+                        }
+                        return '';
                     }
                 }
             }
@@ -513,7 +524,7 @@ ${this._gql(node)}
                     .withName(node.name.value)
                     .withBlock(fragmentSchema.node.selectionSet.selections
                     .map(s => {
-                    return this._getResponseFieldRecursive(s, fragmentParentSchema);
+                    return this._getResponseFieldRecursive(s, fragmentParentSchema, false);
                 })
                     .join('\n')).string;
                 return innerClassDefinition;
@@ -524,16 +535,30 @@ ${this._gql(node)}
                 if (!fragmentSchema) {
                     throw new Error(`Fragment schema not found; ${fragmentSchemaName}`);
                 }
+                let block = '\n' +
+                    node.selectionSet.selections
+                        .map(s => {
+                        return this._getResponseFieldRecursive(s, fragmentSchema, false);
+                    })
+                        .join('\n');
+                if (addField) {
+                    block =
+                        block +
+                            '\n' +
+                            addField
+                                .map(s => {
+                                return this._getResponseFieldRecursive(s, fragmentSchema, false);
+                            })
+                                .join('\n');
+                }
                 const innerClassDefinition = new PythonDeclarationBlock({})
                     .asKind('class')
                     .withDecorator('@dataclass')
                     .withName(fragmentSchemaName)
-                    .withBlock('\n' +
-                    node.selectionSet.selections
-                        .map(s => {
-                        return this._getResponseFieldRecursive(s, fragmentSchema);
-                    })
-                        .join('\n')).string;
+                    .withBlock(block).string;
+                if (addField) {
+                    return innerClassDefinition + '\n';
+                }
                 return innerClassDefinition + '\n';
             }
         }
@@ -541,7 +566,7 @@ ${this._gql(node)}
     getResponseClass(node) {
         var _a, _b;
         const operationSchema = this._schemaAST.definitions.find(s => s.kind === Kind.OBJECT_TYPE_DEFINITION && s.name.value.toLowerCase() === node.operation);
-        return this._getResponseFieldRecursive(node, operationSchema, (_b = (_a = node.name) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : '');
+        return this._getResponseFieldRecursive(node, operationSchema, false, (_b = (_a = node.name) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : '');
     }
     OperationDefinition(node) {
         return [this.getGQLVar(node), this.getResponseClass(node)]
@@ -554,7 +579,7 @@ ${this._gql(node)}
 
 const getImports = () => {
     return `
-from typing import List, Optional, Union, AsyncGenerator
+from typing import List, Optional, Union, AsyncGenerator, Type
 from dataclasses import dataclass
 from dataclasses import asdict
 from gql import Client, gql
@@ -563,6 +588,20 @@ from gql.transport.aiohttp import AIOHTTPTransport
 from gql.transport.requests import RequestsHTTPTransport
 from dacite import from_dict, Config
 from enum import Enum
+
+def remove_empty(dict_or_list):
+    if isinstance(dict_or_list, dict):
+        for key, value in dict_or_list.items():
+            dict_or_list[key] = remove_empty(value)
+        return dict_or_list
+    elif isinstance(dict_or_list, list):
+        for count, object_in_list in enumerate(dict_or_list):
+            if object_in_list == {} or object_in_list == [] or object_in_list == None:
+                del dict_or_list[count]
+        return dict_or_list
+    else:
+        return dict_or_list
+
 `;
 };
 const getClientFunction = (config, type) => {
