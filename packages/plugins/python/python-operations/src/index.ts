@@ -8,7 +8,7 @@ import { PythonOperationsRawPluginConfig } from './config';
 
 const getImports = () => {
   return `
-from typing import List, Optional, Union, AsyncGenerator
+from typing import List, Optional, Union, AsyncGenerator, Type
 from dataclasses import dataclass
 from dataclasses import asdict
 from gql import Client, gql
