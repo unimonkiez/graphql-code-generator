@@ -191,9 +191,9 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     const hasInputArgs = !!inputs?.length;
     const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
     return `
-${isAsync ? 'async ' : ''}def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}${
-      isAsync ? '_async' : ''
-    }(self, ${inputSignatures}):
+${isAsync ? 'async ' : ''}def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}${isAsync ? '_async' : ''}(self${
+      hasInputArgs ? ', ' : ' '
+    }${inputSignatures}):
 `;
   }
 
@@ -308,7 +308,7 @@ return ret
     const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
 
     return `
-async def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}(self, ${inputSignatures}):
+async def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}(self${hasInputArgs ? ', ' : ' '}${inputSignatures}):
 `;
   }
 
