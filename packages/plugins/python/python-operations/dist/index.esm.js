@@ -171,7 +171,10 @@ class PythonFieldType {
     }
 }
 
+/* eslint-disable no-console */
 const defaultSuffix = 'GQL';
+const lowerFirstLetter = str => str.charAt(0).toLowerCase() + str.slice(1);
+const camelToSnakeCase = str => lowerFirstLetter(str).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 class PythonOperationsVisitor extends ClientSideBaseVisitor {
     constructor(schema, fragments, rawConfig, documents) {
         super(schema, fragments, rawConfig, {
@@ -234,7 +237,7 @@ class PythonOperationsVisitor extends ClientSideBaseVisitor {
                 return defaultSuffix;
         }
     }
-    getExecuteFunction(isAsync, node) {
+    getExecuteFunctionSignature(isAsync, node) {
         var _a;
         if (!node.name || !node.name.value) {
             return null;
@@ -267,35 +270,69 @@ class PythonOperationsVisitor extends ClientSideBaseVisitor {
         const inputs = (_a = node.variableDefinitions) === null || _a === void 0 ? void 0 : _a.map(v => this._gqlInputSignature(v));
         const hasInputArgs = !!(inputs === null || inputs === void 0 ? void 0 : inputs.length);
         const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
+        return `
+${isAsync ? 'async ' : ''}def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}${isAsync ? '_async' : ''}(self, ${inputSignatures}):
+`;
+    }
+    getExecuteFunctionBody(isAsync, node) {
+        var _a;
+        if (!node.name || !node.name.value) {
+            return null;
+        }
+        this._collectedOperations.push(node);
+        const documentVariableName = this.convertName(node, {
+            suffix: this.config.documentVariableSuffix,
+            prefix: this.config.documentVariablePrefix,
+            useTypesPrefix: false,
+        });
+        const operationType = node.operation;
+        const operationTypeSuffix = this.config.dedupeOperationSuffix && node.name.value.toLowerCase().endsWith(node.operation)
+            ? ''
+            : !operationType
+                ? ''
+                : operationType;
+        const operationResultType = this.convertName(node, {
+            suffix: operationTypeSuffix + this._parsedConfig.operationResultSuffix,
+        });
+        const operationVariablesTypes = this.convertName(node, {
+            suffix: operationTypeSuffix + 'Variables',
+        });
+        this._operationsToInclude.push({
+            node,
+            documentVariableName,
+            operationType,
+            operationResultType,
+            operationVariablesTypes,
+        });
+        const inputs = (_a = node.variableDefinitions) === null || _a === void 0 ? void 0 : _a.map(v => this._gqlInputSignature(v));
         const variables = `{
     ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
   }`;
         const resposeClass = `${this.convertName(node.name.value).replace(/_/g, '')}Response`;
         const content = `
-${isAsync ? 'async ' : ''}def execute${isAsync ? '_async' : ''}_${this._get_node_name(node)}(${inputSignatures}) -> ${resposeClass}:
-  client = _get_client_${isAsync ? 'async' : 'sync'}()
-  variables=${variables}
-  variables_no_none = {k:v for k,v in variables.items() if v is not None}
+variables=${variables}
+variables_no_none = {k:v for k,v in variables.items() if v is not None}
 ${isAsync
             ? `
-  response_text_promise = client.execute_async(
-    _gql_${this._get_node_name(node)},
-    variable_values=variables_no_none,
-  )
-  response_dict = await response_text_promise`
+response_text_promise = self.__async_client.execute_async(
+  _gql_${this._get_node_name(node)},
+  variable_values=variables_no_none,
+)
+response_dict = await response_text_promise`
             : `
-  response_dict = client.execute_sync(
-    _gql_${this._get_node_name(node)},
-    variable_values=variables_no_none,
-  )`}
+response_dict = self.__client.execute_sync(
+  _gql_${this._get_node_name(node)},
+  variable_values=variables_no_none,
+)`}
 
-  response_dict = remove_empty(response_dict)
-  return from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
+response_dict = remove_empty(response_dict)
+ret: ${resposeClass} = from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
+return ret
 `;
         // {"researchBox": GetDatapointResponse.researchBox}
         return [content].filter(a => a).join('\n');
     }
-    getExecuteFunctionSubscriptions(node) {
+    getExecuteFunctionSubscriptionsSignature(node) {
         var _a;
         if (!node.name || !node.name.value) {
             return null;
@@ -328,21 +365,56 @@ ${isAsync
         const inputs = (_a = node.variableDefinitions) === null || _a === void 0 ? void 0 : _a.map(v => this._gqlInputSignature(v));
         const hasInputArgs = !!(inputs === null || inputs === void 0 ? void 0 : inputs.length);
         const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
+        return `
+async def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}(self, ${inputSignatures}):
+`;
+    }
+    getExecuteFunctionSubscriptionsBody(node) {
+        var _a;
+        if (!node.name || !node.name.value) {
+            return null;
+        }
+        this._collectedOperations.push(node);
+        const documentVariableName = this.convertName(node, {
+            suffix: this.config.documentVariableSuffix,
+            prefix: this.config.documentVariablePrefix,
+            useTypesPrefix: false,
+        });
+        const operationType = node.operation;
+        const operationTypeSuffix = this.config.dedupeOperationSuffix && node.name.value.toLowerCase().endsWith(node.operation)
+            ? ''
+            : !operationType
+                ? ''
+                : operationType;
+        const operationResultType = this.convertName(node, {
+            suffix: operationTypeSuffix + this._parsedConfig.operationResultSuffix,
+        });
+        const operationVariablesTypes = this.convertName(node, {
+            suffix: operationTypeSuffix + 'Variables',
+        });
+        this._operationsToInclude.push({
+            node,
+            documentVariableName,
+            operationType,
+            operationResultType,
+            operationVariablesTypes,
+        });
+        const inputs = (_a = node.variableDefinitions) === null || _a === void 0 ? void 0 : _a.map(v => this._gqlInputSignature(v));
         const variables = `{
     ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
   }`;
         const resposeClass = `${this.convertName(node.name.value).replace(/_/g, '')}Response`;
         const content = `
-async def execute_async_${this._get_node_name(node)}(${inputSignatures}) -> AsyncGenerator[${resposeClass}, None]:
-  async with _get_client_subscriptions() as client:
-    variables = ${variables}
-    variables_no_none = {k:v for k,v in variables.items() if v is not None}
-    generator = client.subscribe(
-      _gql_${this._get_node_name(node)},
-      variable_values=variables_no_none,
-    )
-    async for response_dict in generator:
-        yield from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
+async with self.__websocket_client as client:
+  variables = ${variables}
+  variables_no_none = {k:v for k,v in variables.items() if v is not None}
+  generator = client.subscribe(
+    _gql_${this._get_node_name(node)},
+    variable_values=variables_no_none,
+  )
+  async for response_dict in generator:
+    ret: ${resposeClass} = from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
+    yield ret
 `;
         return [content].filter(a => a).join('\n');
     }
@@ -350,8 +422,7 @@ async def execute_async_${this._get_node_name(node)}(${inputSignatures}) -> Asyn
         return `${this.convertName(node)}_${this._operationSuffix(node.operation)}`.toLowerCase();
     }
     getGQLVar(node) {
-        return `
-_gql_${this._get_node_name(node)} = gql("""
+        return `_gql_${this._get_node_name(node)} = gql("""
 ${this._gql(node)}
 """)
 `;
@@ -575,20 +646,32 @@ ${this._gql(node)}
         return this._getResponseFieldRecursive(node, operationSchema, false, (_b = (_a = node.name) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : '');
     }
     OperationDefinition(node) {
-        return [this.getGQLVar(node), this.getResponseClass(node)]
-            .concat(node.operation === 'subscription'
-            ? [this.getExecuteFunctionSubscriptions(node)]
-            : [this.getExecuteFunction(false, node), this.getExecuteFunction(true, node)])
-            .join('\n\n');
+        return node.operation === 'subscription'
+            ? `${indentMultiline(this.getExecuteFunctionSubscriptionsSignature(node), 1)}
+${indentMultiline(this.getGQLVar(node), 2)}
+${indentMultiline(this.getResponseClass(node), 2)}
+${indentMultiline(this.getExecuteFunctionSubscriptionsBody(node), 2)}
+`
+            : `${indentMultiline(this.getExecuteFunctionSignature(false, node), 1)}
+${indentMultiline(this.getGQLVar(node), 2)}
+${indentMultiline(this.getResponseClass(node), 2)}
+${indentMultiline(this.getExecuteFunctionBody(false, node), 2)}
+
+${indentMultiline(this.getExecuteFunctionSignature(true, node), 1)}
+${indentMultiline(this.getGQLVar(node), 2)}
+${indentMultiline(this.getResponseClass(node), 2)}
+${indentMultiline(this.getExecuteFunctionBody(true, node), 2)}
+`;
     }
 }
 
 const getImports = () => {
     return `
-from typing import List, Optional, Union, AsyncGenerator, Type
+from typing import Any, List, Dict, Optional, Union, AsyncGenerator, Type
 from dataclasses import dataclass
 from dataclasses import asdict
-from gql import Client, gql
+from gql import gql
+from gql import Client as GqlClient
 from gql.transport.websockets import WebsocketsTransport
 from gql.transport.aiohttp import AIOHTTPTransport
 from gql.transport.requests import RequestsHTTPTransport
@@ -598,26 +681,36 @@ from enum import Enum
 def remove_empty(dict_or_list):
     if isinstance(dict_or_list, dict):
         for key, value in dict_or_list.items():
-            dict_or_list[key] = remove_empty(value)
+            if value == {} or value == []:
+              del dict_or_list[key]
+            else:
+              dict_or_list[key] = remove_empty(value)
         return dict_or_list
     elif isinstance(dict_or_list, list):
         for count, object_in_list in enumerate(dict_or_list):
-            if object_in_list == {} or object_in_list == [] or object_in_list == None:
+            if object_in_list == {} or object_in_list == []:
                 del dict_or_list[count]
+        for count, object_in_list in enumerate(dict_or_list):
+            dict_or_list[count] = remove_empty(object_in_list)
         return dict_or_list
     else:
         return dict_or_list
 
 `;
 };
-const getClientFunction = (config, type) => {
-    const transportClass = type === 'sync' ? 'RequestsHTTPTransport' : type === 'async' ? 'AIOHTTPTransport' : 'WebsocketsTransport';
+const getClient = () => {
     return `
-def _get_client_${type}() -> Client:
-  transport = ${transportClass}(url=${type === 'subscriptions' ? config.schemaSubscriptions : config.schema}, headers={${config.headerName !== undefined && config.headerName !== '' ? `${config.headerName}: ${config.headerValue}` : ``}})
-  client = Client(transport=transport, fetch_schema_from_transport=False)
-  return client
-`;
+class Client:
+  def __init__(self, url: str, headers: Optional[Dict[str, Any]] = None):
+    self.__http_transport = RequestsHTTPTransport(url=url, headers=headers)
+    self.__client = GqlClient(transport=self.__http_transport, fetch_schema_from_transport=False)
+    
+    self.__async_transport = AIOHTTPTransport(url=url, headers=headers)
+    self.__async_client = GqlClient(transport=self.__async_transport, fetch_schema_from_transport=False)
+
+    self.__websocket_transport = WebsocketsTransport(url=url, headers=headers)
+    self.__websocket_client = GqlClient(transport=self.__websocket_transport, fetch_schema_from_transport=False)
+  `;
 };
 const plugin = (schema, documents, config) => {
     const allAst = concatAST(documents.map(v => v.document));
@@ -636,9 +729,7 @@ const plugin = (schema, documents, config) => {
         prepend: [],
         content: [
             getImports(),
-            getClientFunction(config, 'sync'),
-            getClientFunction(config, 'async'),
-            getClientFunction(config, 'subscriptions'),
+            getClient(),
             ...visitorResult.definitions.filter(t => typeof t === 'string'),
         ]
             .filter(a => a)

@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import {
   ClientSideBaseVisitor,
   ClientSideBasePluginConfig,
@@ -48,6 +49,10 @@ export interface PythonOperationsPluginConfig extends ClientSideBasePluginConfig
   mutationSuffix: string;
   subscriptionSuffix: string;
 }
+
+const lowerFirstLetter = str => str.charAt(0).toLowerCase() + str.slice(1);
+
+const camelToSnakeCase = str => lowerFirstLetter(str).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 
 export class PythonOperationsVisitor extends ClientSideBaseVisitor<
   PythonOperationsRawPluginConfig,
@@ -147,7 +152,7 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     }
   }
 
-  private getExecuteFunction(isAsync: boolean, node: OperationDefinitionNode): string {
+  private getExecuteFunctionSignature(isAsync: boolean, node: OperationDefinitionNode): string {
     if (!node.name || !node.name.value) {
       return null;
     }
@@ -186,6 +191,50 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     const inputs = node.variableDefinitions?.map(v => this._gqlInputSignature(v));
     const hasInputArgs = !!inputs?.length;
     const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
+    return `
+${isAsync ? 'async ' : ''}def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}${
+      isAsync ? '_async' : ''
+    }(self, ${inputSignatures}):
+`;
+  }
+
+  private getExecuteFunctionBody(isAsync: boolean, node: OperationDefinitionNode): string {
+    if (!node.name || !node.name.value) {
+      return null;
+    }
+
+    this._collectedOperations.push(node);
+
+    const documentVariableName = this.convertName(node, {
+      suffix: this.config.documentVariableSuffix,
+      prefix: this.config.documentVariablePrefix,
+      useTypesPrefix: false,
+    });
+
+    const operationType: string = node.operation;
+    const operationTypeSuffix: string =
+      this.config.dedupeOperationSuffix && node.name.value.toLowerCase().endsWith(node.operation)
+        ? ''
+        : !operationType
+        ? ''
+        : operationType;
+
+    const operationResultType: string = this.convertName(node, {
+      suffix: operationTypeSuffix + this._parsedConfig.operationResultSuffix,
+    });
+    const operationVariablesTypes: string = this.convertName(node, {
+      suffix: operationTypeSuffix + 'Variables',
+    });
+
+    this._operationsToInclude.push({
+      node,
+      documentVariableName,
+      operationType,
+      operationResultType,
+      operationVariablesTypes,
+    });
+
+    const inputs = node.variableDefinitions?.map(v => this._gqlInputSignature(v));
     const variables = `{
     ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
   }`;
@@ -193,36 +242,33 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
     const resposeClass = `${this.convertName(node.name.value).replace(/_/g, '')}Response`;
 
     const content = `
-${isAsync ? 'async ' : ''}def execute${isAsync ? '_async' : ''}_${this._get_node_name(
-      node
-    )}(${inputSignatures}) -> ${resposeClass}:
-  client = _get_client_${isAsync ? 'async' : 'sync'}()
-  variables=${variables}
-  variables_no_none = {k:v for k,v in variables.items() if v is not None}
+variables=${variables}
+variables_no_none = {k:v for k,v in variables.items() if v is not None}
 ${
   isAsync
     ? `
-  response_text_promise = client.execute_async(
-    _gql_${this._get_node_name(node)},
-    variable_values=variables_no_none,
-  )
-  response_dict = await response_text_promise`
+response_text_promise = self.__async_client.execute_async(
+  _gql_${this._get_node_name(node)},
+  variable_values=variables_no_none,
+)
+response_dict = await response_text_promise`
     : `
-  response_dict = client.execute_sync(
-    _gql_${this._get_node_name(node)},
-    variable_values=variables_no_none,
-  )`
+response_dict = self.__client.execute_sync(
+  _gql_${this._get_node_name(node)},
+  variable_values=variables_no_none,
+)`
 }
 
-  response_dict = remove_empty(response_dict)
-  return from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
+response_dict = remove_empty(response_dict)
+ret: ${resposeClass} = from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
+return ret
 `;
 
     // {"researchBox": GetDatapointResponse.researchBox}
     return [content].filter(a => a).join('\n');
   }
 
-  private getExecuteFunctionSubscriptions(node: OperationDefinitionNode): string {
+  private getExecuteFunctionSubscriptionsSignature(node: OperationDefinitionNode): string {
     if (!node.name || !node.name.value) {
       return null;
     }
@@ -261,6 +307,49 @@ ${
     const inputs = node.variableDefinitions?.map(v => this._gqlInputSignature(v));
     const hasInputArgs = !!inputs?.length;
     const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
+
+    return `
+async def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}(self, ${inputSignatures}):
+`;
+  }
+
+  private getExecuteFunctionSubscriptionsBody(node: OperationDefinitionNode): string {
+    if (!node.name || !node.name.value) {
+      return null;
+    }
+
+    this._collectedOperations.push(node);
+
+    const documentVariableName = this.convertName(node, {
+      suffix: this.config.documentVariableSuffix,
+      prefix: this.config.documentVariablePrefix,
+      useTypesPrefix: false,
+    });
+
+    const operationType: string = node.operation;
+    const operationTypeSuffix: string =
+      this.config.dedupeOperationSuffix && node.name.value.toLowerCase().endsWith(node.operation)
+        ? ''
+        : !operationType
+        ? ''
+        : operationType;
+
+    const operationResultType: string = this.convertName(node, {
+      suffix: operationTypeSuffix + this._parsedConfig.operationResultSuffix,
+    });
+    const operationVariablesTypes: string = this.convertName(node, {
+      suffix: operationTypeSuffix + 'Variables',
+    });
+
+    this._operationsToInclude.push({
+      node,
+      documentVariableName,
+      operationType,
+      operationResultType,
+      operationVariablesTypes,
+    });
+
+    const inputs = node.variableDefinitions?.map(v => this._gqlInputSignature(v));
     const variables = `{
     ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
   }`;
@@ -268,16 +357,16 @@ ${
     const resposeClass = `${this.convertName(node.name.value).replace(/_/g, '')}Response`;
 
     const content = `
-async def execute_async_${this._get_node_name(node)}(${inputSignatures}) -> AsyncGenerator[${resposeClass}, None]:
-  async with _get_client_subscriptions() as client:
-    variables = ${variables}
-    variables_no_none = {k:v for k,v in variables.items() if v is not None}
-    generator = client.subscribe(
-      _gql_${this._get_node_name(node)},
-      variable_values=variables_no_none,
-    )
-    async for response_dict in generator:
-        yield from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
+async with self.__websocket_client as client:
+  variables = ${variables}
+  variables_no_none = {k:v for k,v in variables.items() if v is not None}
+  generator = client.subscribe(
+    _gql_${this._get_node_name(node)},
+    variable_values=variables_no_none,
+  )
+  async for response_dict in generator:
+    ret: ${resposeClass} = from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
+    yield ret
 `;
     return [content].filter(a => a).join('\n');
   }
@@ -286,8 +375,7 @@ async def execute_async_${this._get_node_name(node)}(${inputSignatures}) -> Asyn
     return `${this.convertName(node)}_${this._operationSuffix(node.operation)}`.toLowerCase();
   }
   private getGQLVar(node: OperationDefinitionNode): string {
-    return `
-_gql_${this._get_node_name(node)} = gql("""
+    return `_gql_${this._get_node_name(node)} = gql("""
 ${this._gql(node)}
 """)
 `;
@@ -547,12 +635,21 @@ ${this._gql(node)}
   }
 
   public OperationDefinition(node: OperationDefinitionNode): string {
-    return [this.getGQLVar(node), this.getResponseClass(node)]
-      .concat(
-        node.operation === 'subscription'
-          ? [this.getExecuteFunctionSubscriptions(node)]
-          : [this.getExecuteFunction(false, node), this.getExecuteFunction(true, node)]
-      )
-      .join('\n\n');
+    return node.operation === 'subscription'
+      ? `${indentMultiline(this.getExecuteFunctionSubscriptionsSignature(node), 1)}
+${indentMultiline(this.getGQLVar(node), 2)}
+${indentMultiline(this.getResponseClass(node), 2)}
+${indentMultiline(this.getExecuteFunctionSubscriptionsBody(node), 2)}
+`
+      : `${indentMultiline(this.getExecuteFunctionSignature(false, node), 1)}
+${indentMultiline(this.getGQLVar(node), 2)}
+${indentMultiline(this.getResponseClass(node), 2)}
+${indentMultiline(this.getExecuteFunctionBody(false, node), 2)}
+
+${indentMultiline(this.getExecuteFunctionSignature(true, node), 1)}
+${indentMultiline(this.getGQLVar(node), 2)}
+${indentMultiline(this.getResponseClass(node), 2)}
+${indentMultiline(this.getExecuteFunctionBody(true, node), 2)}
+`;
   }
 }

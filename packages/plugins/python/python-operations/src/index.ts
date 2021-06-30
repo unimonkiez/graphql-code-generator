@@ -8,10 +8,11 @@ import { PythonOperationsRawPluginConfig } from './config';
 
 const getImports = () => {
   return `
-from typing import List, Optional, Union, AsyncGenerator, Type
+from typing import Any, List, Dict, Optional, Union, AsyncGenerator, Type
 from dataclasses import dataclass
 from dataclasses import asdict
-from gql import Client, gql
+from gql import gql
+from gql import Client as GqlClient
 from gql.transport.websockets import WebsocketsTransport
 from gql.transport.aiohttp import AIOHTTPTransport
 from gql.transport.requests import RequestsHTTPTransport
@@ -21,12 +22,17 @@ from enum import Enum
 def remove_empty(dict_or_list):
     if isinstance(dict_or_list, dict):
         for key, value in dict_or_list.items():
-            dict_or_list[key] = remove_empty(value)
+            if value == {} or value == []:
+              del dict_or_list[key]
+            else:
+              dict_or_list[key] = remove_empty(value)
         return dict_or_list
     elif isinstance(dict_or_list, list):
         for count, object_in_list in enumerate(dict_or_list):
-            if object_in_list == {} or object_in_list == [] or object_in_list == None:
+            if object_in_list == {} or object_in_list == []:
                 del dict_or_list[count]
+        for count, object_in_list in enumerate(dict_or_list):
+            dict_or_list[count] = remove_empty(object_in_list)
         return dict_or_list
     else:
         return dict_or_list
@@ -34,19 +40,19 @@ def remove_empty(dict_or_list):
 `;
 };
 
-const getClientFunction = (config: PythonOperationsRawPluginConfig, type: 'sync' | 'async' | 'subscriptions') => {
-  const transportClass =
-    type === 'sync' ? 'RequestsHTTPTransport' : type === 'async' ? 'AIOHTTPTransport' : 'WebsocketsTransport';
+const getClient = () => {
   return `
-def _get_client_${type}() -> Client:
-  transport = ${transportClass}(url=${
-    type === 'subscriptions' ? config.schemaSubscriptions : config.schema
-  }, headers={${
-    config.headerName !== undefined && config.headerName !== '' ? `${config.headerName}: ${config.headerValue}` : ``
-  }})
-  client = Client(transport=transport, fetch_schema_from_transport=False)
-  return client
-`;
+class Client:
+  def __init__(self, url: str, headers: Optional[Dict[str, Any]] = None):
+    self.__http_transport = RequestsHTTPTransport(url=url, headers=headers)
+    self.__client = GqlClient(transport=self.__http_transport, fetch_schema_from_transport=False)
+    
+    self.__async_transport = AIOHTTPTransport(url=url, headers=headers)
+    self.__async_client = GqlClient(transport=self.__async_transport, fetch_schema_from_transport=False)
+
+    self.__websocket_transport = WebsocketsTransport(url=url, headers=headers)
+    self.__websocket_client = GqlClient(transport=self.__websocket_transport, fetch_schema_from_transport=False)
+  `;
 };
 
 export const plugin: PluginFunction<PythonOperationsRawPluginConfig> = (
@@ -71,13 +77,7 @@ export const plugin: PluginFunction<PythonOperationsRawPluginConfig> = (
   const visitorResult = visit(allAst, { leave: visitor });
   return {
     prepend: [],
-    content: [
-      getImports(),
-      getClientFunction(config, 'sync'),
-      getClientFunction(config, 'async'),
-      getClientFunction(config, 'subscriptions'),
-      ...visitorResult.definitions.filter(t => typeof t === 'string'),
-    ]
+    content: [getImports(), getClient(), ...visitorResult.definitions.filter(t => typeof t === 'string')]
       .filter(a => a)
       .join('\n'),
   };

@@ -32,8 +32,10 @@ export declare class PythonOperationsVisitor extends ClientSideBaseVisitor<
   private _nonScalarPrefix;
   private _gqlInputSignature;
   private _operationSuffix;
-  private getExecuteFunction;
-  private getExecuteFunctionSubscriptions;
+  private getExecuteFunctionSignature;
+  private getExecuteFunctionBody;
+  private getExecuteFunctionSubscriptionsSignature;
+  private getExecuteFunctionSubscriptionsBody;
   private _get_node_name;
   private getGQLVar;
   protected resolveFieldType(typeNode: TypeNode, hasDefaultValue?: Boolean): PythonFieldType;
