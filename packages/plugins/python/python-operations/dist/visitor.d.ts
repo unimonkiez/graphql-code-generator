@@ -13,6 +13,7 @@ export interface PythonOperationsPluginConfig extends ClientSideBasePluginConfig
   querySuffix: string;
   mutationSuffix: string;
   subscriptionSuffix: string;
+  generateAsync?: boolean;
 }
 export declare class PythonOperationsVisitor extends ClientSideBaseVisitor<
   PythonOperationsRawPluginConfig,

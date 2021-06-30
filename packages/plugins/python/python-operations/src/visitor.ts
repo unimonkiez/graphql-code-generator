@@ -47,6 +47,7 @@ export interface PythonOperationsPluginConfig extends ClientSideBasePluginConfig
   querySuffix: string;
   mutationSuffix: string;
   subscriptionSuffix: string;
+  generateAsync?: boolean;
 }
 
 const lowerFirstLetter = str => str.charAt(0).toLowerCase() + str.slice(1);
@@ -308,7 +309,7 @@ return ret
     const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
 
     return `
-async def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}(self${hasInputArgs ? ', ' : ' '}${inputSignatures}):
+def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}(self${hasInputArgs ? ', ' : ' '}${inputSignatures}):
 `;
   }
 
@@ -356,16 +357,18 @@ async def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}(self${hasInp
     const resposeClass = `${this.convertName(node.name.value).replace(/_/g, '')}Response`;
 
     const content = `
-async with self.__websocket_client as client:
-  variables = ${variables}
-  variables_no_none = {k:v for k,v in variables.items() if v is not None}
-  generator = client.subscribe(
-    _gql_${this._get_node_name(node)},
-    variable_values=variables_no_none,
-  )
-  async for response_dict in generator:
-    ret: ${resposeClass} = from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
-    yield ret
+variables = ${variables}
+variables_no_none = {k:v for k,v in variables.items() if v is not None}
+generator = self.__websocket_client.call(
+  _gql_${this._get_node_name(node)},
+  variables=variables_no_none,
+  operation_name="${node.name.value}"
+)
+
+for response_dict in generator:
+  response_dict = remove_empty(response_dict)
+  ret: ${resposeClass} = from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
+  yield ret
 `;
     return [content].filter(a => a).join('\n');
   }
@@ -373,10 +376,10 @@ async with self.__websocket_client as client:
   private _get_node_name(node: OperationDefinitionNode): String {
     return `${this.convertName(node)}_${this._operationSuffix(node.operation)}`.toLowerCase();
   }
-  private getGQLVar(node: OperationDefinitionNode): string {
-    return `_gql_${this._get_node_name(node)} = gql("""
+  private getGQLVar(node: OperationDefinitionNode, retString?: boolean): string {
+    return `_gql_${this._get_node_name(node)} = ${!retString ? 'gql(' : ''}"""
 ${this._gql(node)}
-""")
+"""${!retString ? ')' : ''}
 `;
   }
   protected resolveFieldType(typeNode: TypeNode, hasDefaultValue: Boolean = false): PythonFieldType {
@@ -636,7 +639,7 @@ ${this._gql(node)}
   public OperationDefinition(node: OperationDefinitionNode): string {
     return node.operation === 'subscription'
       ? `${indentMultiline(this.getExecuteFunctionSubscriptionsSignature(node), 1)}
-${indentMultiline(this.getGQLVar(node), 2)}
+${indentMultiline(this.getGQLVar(node, true), 2)}
 ${indentMultiline(this.getResponseClass(node), 2)}
 ${indentMultiline(this.getExecuteFunctionSubscriptionsBody(node), 2)}
 `
@@ -645,10 +648,10 @@ ${indentMultiline(this.getGQLVar(node), 2)}
 ${indentMultiline(this.getResponseClass(node), 2)}
 ${indentMultiline(this.getExecuteFunctionBody(false, node), 2)}
 
-${indentMultiline(this.getExecuteFunctionSignature(true, node), 1)}
-${indentMultiline(this.getGQLVar(node), 2)}
-${indentMultiline(this.getResponseClass(node), 2)}
-${indentMultiline(this.getExecuteFunctionBody(true, node), 2)}
+${this.config.generateAsync ? indentMultiline(this.getExecuteFunctionSignature(true, node), 1) : ''}
+${this.config.generateAsync ? indentMultiline(this.getGQLVar(node), 2) : ''}
+${this.config.generateAsync ? indentMultiline(this.getResponseClass(node), 2) : ''}
+${this.config.generateAsync ? indentMultiline(this.getExecuteFunctionBody(true, node), 2) : ''}
 `;
   }
 }
