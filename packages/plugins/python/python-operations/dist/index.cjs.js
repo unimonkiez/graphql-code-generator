@@ -799,7 +799,7 @@ class Client:
   def __init__(self, url: str, ws_url: str, headers: Optional[Dict[str, Any]] = None, ws_connection_payload: Optional[Dict[str, Any]] = None, secure: bool = True):
 
     if "://" in url or "://" in ws_url:
-      raise ValueError("pass url without scheme! Example: '127.0.0.1:8080/graphql'")
+      raise ValueError("pass url/ws_url without scheme! Example: '127.0.0.1:8080/graphql'")
     
     http_url = ("https://" if secure else "http://") + url
     ws_url = ("wss://" if secure else "ws://") + ws_url
