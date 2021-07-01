@@ -6,13 +6,14 @@ import { extname } from 'path';
 import gql from 'graphql-tag';
 import { PythonOperationsRawPluginConfig } from './config';
 
-const getImports = () => {
+const getImports = (config: PythonOperationsRawPluginConfig) => {
   return `
 from typing import Any, List, Dict, Optional, Union, AsyncGenerator, Type
 from dataclasses import dataclass
 from dataclasses import asdict
 from gql import gql, Client as GqlClient
 from gql.transport.aiohttp import AIOHTTPTransport
+${config.generateAsync ? 'from gql.transport.websockets import WebsocketsTransport' : ''}
 from gql.transport.requests import RequestsHTTPTransport
 from dacite import from_dict, Config
 from enum import Enum
@@ -22,22 +23,31 @@ import json
 
 def remove_empty(dict_or_list):
     if isinstance(dict_or_list, dict):
+        delete_keys = []
         for key, value in dict_or_list.items():
-            if value == {} or value == []:
-              del dict_or_list[key]
+            if value == {}:
+              delete_keys.append(key)
             else:
-              dict_or_list[key] = remove_empty(value)
+              dict_or_list[key] = remove_empty(value)  
+        for key in delete_keys:
+          del dict_or_list[key]
         return dict_or_list
     elif isinstance(dict_or_list, list):
-        for count, object_in_list in enumerate(dict_or_list):
-            if object_in_list == {} or object_in_list == []:
-                del dict_or_list[count]
-        for count, object_in_list in enumerate(dict_or_list):
-            dict_or_list[count] = remove_empty(object_in_list)
+        delete_indices = []
+        for idx, object_in_list in enumerate(dict_or_list):
+            if object_in_list == {}:
+                delete_indices.append(idx)
+            else:
+              dict_or_list[idx] = remove_empty(object_in_list)
+        for idx in sorted(delete_indices, reverse=True):
+          del dict_or_list[idx]
         return dict_or_list
     else:
         return dict_or_list
 
+${
+  !config.generateAsync
+    ? `
 # adapted from https://github.com/profusion/sgqlc/blob/master/sgqlc/endpoint/websocket.py
 class WebsocketClient:
   def __init__(self, url, connection_payload, **ws_options):
@@ -104,6 +114,9 @@ class WebsocketClient:
 
     finally:
         ws.close()
+`
+    : ''
+}
 `;
 };
 
@@ -117,9 +130,6 @@ class Client:
     
     http_url = ("https://" if secure else "http://") + url
     ws_url = ("wss://" if secure else "ws://") + url
-
-    self.__http_transport = RequestsHTTPTransport(url=http_url, headers=headers)
-    self.__client = GqlClient(transport=self.__http_transport, fetch_schema_from_transport=False)
     ${
       config.generateAsync
         ? `
@@ -127,10 +137,18 @@ class Client:
     self.__async_transport = AIOHTTPTransport(url=http_url, headers=headers)
     self.__async_client = GqlClient(transport=self.__async_transport, fetch_schema_from_transport=False)
 
+    self.__websocket_transport = WebsocketsTransport(url=ws_url, init_payload=headers)
+    self.__websocket_client = GqlClient(transport=self.__websocket_transport, fetch_schema_from_transport=False)
+
     `
-        : ''
-    }
+        : `
+    self.__http_transport = RequestsHTTPTransport(url=http_url, headers=headers)
+    self.__client = GqlClient(transport=self.__http_transport, fetch_schema_from_transport=False)
+
     self.__websocket_client = WebsocketClient(url=ws_url, connection_payload=ws_connection_payload)
+
+    `
+    }
   `;
 };
 
@@ -156,7 +174,7 @@ export const plugin: PluginFunction<PythonOperationsRawPluginConfig> = (
   const visitorResult = visit(allAst, { leave: visitor });
   return {
     prepend: [],
-    content: [getImports(), getClient(config), ...visitorResult.definitions.filter(t => typeof t === 'string')]
+    content: [getImports(config), getClient(config), ...visitorResult.definitions.filter(t => typeof t === 'string')]
       .filter(a => a)
       .join('\n'),
   };

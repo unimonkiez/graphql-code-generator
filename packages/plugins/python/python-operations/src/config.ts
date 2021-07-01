@@ -83,13 +83,13 @@ export interface PythonOperationsRawPluginConfig extends RawClientSideBasePlugin
    */
   headerValue: string;
   /**
-   * @description Allows to disable async generation.
-   * @default true
+   * @description Generate an async client instead
+   * @default false
    *
    * @exampleMarkdown
    * ```yml
    * config:
-   *   generateAsync: false
+   *   generateAsync: true
    * ```
    */
   generateAsync?: boolean;

@@ -189,6 +189,7 @@ class PythonOperationsVisitor extends visitorPluginCommon.ClientSideBaseVisitor 
             mutationSuffix: rawConfig.mutationSuffix || defaultSuffix,
             subscriptionSuffix: rawConfig.subscriptionSuffix || defaultSuffix,
             scalars: visitorPluginCommon.buildScalars(schema, rawConfig.scalars, PYTHON_SCALARS),
+            generateAsync: rawConfig.generateAsync,
         }, documents);
         this._operationsToInclude = [];
         this.overruleConfigSettings();
@@ -276,7 +277,7 @@ class PythonOperationsVisitor extends visitorPluginCommon.ClientSideBaseVisitor 
         const hasInputArgs = !!(inputs === null || inputs === void 0 ? void 0 : inputs.length);
         const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
         return `
-${isAsync ? 'async ' : ''}def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}${isAsync ? '_async' : ''}(self${hasInputArgs ? ', ' : ' '}${inputSignatures}):
+${isAsync ? 'async ' : ''}def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}(self${hasInputArgs ? ', ' : ''}${inputSignatures}):
 `;
     }
     getExecuteFunctionBody(isAsync, node) {
@@ -337,7 +338,7 @@ return ret
         // {"researchBox": GetDatapointResponse.researchBox}
         return [content].filter(a => a).join('\n');
     }
-    getExecuteFunctionSubscriptionsSignature(node) {
+    getExecuteFunctionSubscriptionsSignature(isAsync, node) {
         var _a;
         if (!node.name || !node.name.value) {
             return null;
@@ -371,10 +372,10 @@ return ret
         const hasInputArgs = !!(inputs === null || inputs === void 0 ? void 0 : inputs.length);
         const inputSignatures = hasInputArgs ? inputs.map(sig => sig.signature).join(', ') : '';
         return `
-def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}(self${hasInputArgs ? ', ' : ' '}${inputSignatures}):
+${isAsync ? 'async ' : ''}def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}(self${hasInputArgs ? ', ' : ''}${inputSignatures}):
 `;
     }
-    getExecuteFunctionSubscriptionsBody(node) {
+    getExecuteFunctionSubscriptionsBody(isAsync, node) {
         var _a;
         if (!node.name || !node.name.value) {
             return null;
@@ -409,7 +410,19 @@ def ${camelToSnakeCase(this.convertName(node)).toLowerCase()}(self${hasInputArgs
     ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
   }`;
         const resposeClass = `${this.convertName(node.name.value).replace(/_/g, '')}Response`;
-        const content = `
+        const content = isAsync ? `
+async with self.__websocket_client as client:
+  variables = ${variables}
+  variables_no_none = {k:v for k,v in variables.items() if v is not None}
+  generator = client.subscribe(
+    _gql_${this._get_node_name(node)},
+    variable_values=variables_no_none,
+  )
+  async for response_dict in generator:
+    response_dict = remove_empty(response_dict)
+    ret: ${resposeClass} = from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
+    yield ret
+    ` : `
 variables = ${variables}
 variables_no_none = {k:v for k,v in variables.items() if v is not None}
 generator = self.__websocket_client.call(
@@ -428,10 +441,10 @@ for response_dict in generator:
     _get_node_name(node) {
         return `${this.convertName(node)}_${this._operationSuffix(node.operation)}`.toLowerCase();
     }
-    getGQLVar(node, retString) {
-        return `_gql_${this._get_node_name(node)} = ${!retString ? 'gql(' : ''}"""
+    getGQLVar(node, returnAsString) {
+        return `_gql_${this._get_node_name(node)} = ${!returnAsString ? 'gql(' : ''}"""
 ${this._gql(node)}
-"""${!retString ? ')' : ''}
+"""${!returnAsString ? ')' : ''}
 `;
     }
     resolveFieldType(typeNode, hasDefaultValue = false) {
@@ -654,31 +667,27 @@ ${this._gql(node)}
     }
     OperationDefinition(node) {
         return node.operation === 'subscription'
-            ? `${visitorPluginCommon.indentMultiline(this.getExecuteFunctionSubscriptionsSignature(node), 1)}
-${visitorPluginCommon.indentMultiline(this.getGQLVar(node, true), 2)}
+            ? `${visitorPluginCommon.indentMultiline(this.getExecuteFunctionSubscriptionsSignature(this.config.generateAsync, node), 1)}
+${visitorPluginCommon.indentMultiline(this.getGQLVar(node, !this.config.generateAsync), 2)}
 ${visitorPluginCommon.indentMultiline(this.getResponseClass(node), 2)}
-${visitorPluginCommon.indentMultiline(this.getExecuteFunctionSubscriptionsBody(node), 2)}
+${visitorPluginCommon.indentMultiline(this.getExecuteFunctionSubscriptionsBody(this.config.generateAsync, node), 2)}
 `
-            : `${visitorPluginCommon.indentMultiline(this.getExecuteFunctionSignature(false, node), 1)}
+            : `${visitorPluginCommon.indentMultiline(this.getExecuteFunctionSignature(this.config.generateAsync, node), 1)}
 ${visitorPluginCommon.indentMultiline(this.getGQLVar(node), 2)}
 ${visitorPluginCommon.indentMultiline(this.getResponseClass(node), 2)}
-${visitorPluginCommon.indentMultiline(this.getExecuteFunctionBody(false, node), 2)}
-
-${this.config.generateAsync ? visitorPluginCommon.indentMultiline(this.getExecuteFunctionSignature(true, node), 1) : ''}
-${this.config.generateAsync ? visitorPluginCommon.indentMultiline(this.getGQLVar(node), 2) : ''}
-${this.config.generateAsync ? visitorPluginCommon.indentMultiline(this.getResponseClass(node), 2) : ''}
-${this.config.generateAsync ? visitorPluginCommon.indentMultiline(this.getExecuteFunctionBody(true, node), 2) : ''}
+${visitorPluginCommon.indentMultiline(this.getExecuteFunctionBody(this.config.generateAsync, node), 2)}
 `;
     }
 }
 
-const getImports = () => {
+const getImports = (config) => {
     return `
 from typing import Any, List, Dict, Optional, Union, AsyncGenerator, Type
 from dataclasses import dataclass
 from dataclasses import asdict
 from gql import gql, Client as GqlClient
 from gql.transport.aiohttp import AIOHTTPTransport
+${config.generateAsync ? 'from gql.transport.websockets import WebsocketsTransport' : ''}
 from gql.transport.requests import RequestsHTTPTransport
 from dacite import from_dict, Config
 from enum import Enum
@@ -688,22 +697,29 @@ import json
 
 def remove_empty(dict_or_list):
     if isinstance(dict_or_list, dict):
+        delete_keys = []
         for key, value in dict_or_list.items():
-            if value == {} or value == []:
-              del dict_or_list[key]
+            if value == {}:
+              delete_keys.append(key)
             else:
-              dict_or_list[key] = remove_empty(value)
+              dict_or_list[key] = remove_empty(value)  
+        for key in delete_keys:
+          del dict_or_list[key]
         return dict_or_list
     elif isinstance(dict_or_list, list):
-        for count, object_in_list in enumerate(dict_or_list):
-            if object_in_list == {} or object_in_list == []:
-                del dict_or_list[count]
-        for count, object_in_list in enumerate(dict_or_list):
-            dict_or_list[count] = remove_empty(object_in_list)
+        delete_indices = []
+        for idx, object_in_list in enumerate(dict_or_list):
+            if object_in_list == {}:
+                delete_indices.append(idx)
+            else:
+              dict_or_list[idx] = remove_empty(object_in_list)
+        for idx in sorted(delete_indices, reverse=True):
+          del dict_or_list[idx]
         return dict_or_list
     else:
         return dict_or_list
 
+${!config.generateAsync ? `
 # adapted from https://github.com/profusion/sgqlc/blob/master/sgqlc/endpoint/websocket.py
 class WebsocketClient:
   def __init__(self, url, connection_payload, **ws_options):
@@ -770,6 +786,7 @@ class WebsocketClient:
 
     finally:
         ws.close()
+` : ''}
 `;
 };
 const getClient = (config) => {
@@ -782,16 +799,22 @@ class Client:
     
     http_url = ("https://" if secure else "http://") + url
     ws_url = ("wss://" if secure else "ws://") + url
-
-    self.__http_transport = RequestsHTTPTransport(url=http_url, headers=headers)
-    self.__client = GqlClient(transport=self.__http_transport, fetch_schema_from_transport=False)
-    ${config.generateAsync ? `
+    ${config.generateAsync
+        ? `
 
     self.__async_transport = AIOHTTPTransport(url=http_url, headers=headers)
     self.__async_client = GqlClient(transport=self.__async_transport, fetch_schema_from_transport=False)
 
-    ` : ''}
+    self.__websocket_transport = WebsocketsTransport(url=ws_url, init_payload=headers)
+    self.__websocket_client = GqlClient(transport=self.__websocket_transport, fetch_schema_from_transport=False)
+
+    ` : `
+    self.__http_transport = RequestsHTTPTransport(url=http_url, headers=headers)
+    self.__client = GqlClient(transport=self.__http_transport, fetch_schema_from_transport=False)
+
     self.__websocket_client = WebsocketClient(url=ws_url, connection_payload=ws_connection_payload)
+
+    `}
   `;
 };
 const plugin = (schema, documents, config) => {
@@ -809,7 +832,7 @@ const plugin = (schema, documents, config) => {
     const visitorResult = graphql.visit(allAst, { leave: visitor });
     return {
         prepend: [],
-        content: [getImports(), getClient(config), ...visitorResult.definitions.filter(t => typeof t === 'string')]
+        content: [getImports(config), getClient(config), ...visitorResult.definitions.filter(t => typeof t === 'string')]
             .filter(a => a)
             .join('\n'),
     };
