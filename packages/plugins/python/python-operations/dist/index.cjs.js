@@ -177,6 +177,95 @@ class PythonFieldType {
     }
 }
 
+/**
+ * C# keywords
+ * https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/
+ */
+const csharpKeywords = [
+    'abstract',
+    'as',
+    'and',
+    'or',
+    'not',
+    'from',
+    'None',
+    'base',
+    'bool',
+    'break',
+    'byte',
+    'case',
+    'catch',
+    'char',
+    'checked',
+    'class',
+    'const',
+    'continue',
+    'decimal',
+    'default',
+    'delegate',
+    'do',
+    'double',
+    'else',
+    'enum',
+    'event',
+    'explicit',
+    'extern',
+    'false',
+    'finally',
+    'fixed',
+    'float',
+    'for',
+    'foreach',
+    'goto',
+    'if',
+    'implicit',
+    'in',
+    'int',
+    'interface',
+    'internal',
+    'is',
+    'lock',
+    'long',
+    'namespace',
+    'new',
+    'null',
+    'object',
+    'operator',
+    'out',
+    'override',
+    'params',
+    'private',
+    'protected',
+    'public',
+    'readonly',
+    'ref',
+    'return',
+    'sbyte',
+    'sealed',
+    'short',
+    'sizeof',
+    'stackalloc',
+    'static',
+    'string',
+    'struct',
+    'switch',
+    'this',
+    'throw',
+    'true',
+    'try',
+    'typeof',
+    'uint',
+    'ulong',
+    'unchecked',
+    'unsafe',
+    'ushort',
+    'using',
+    'virtual',
+    'void',
+    'volatile',
+    'while',
+];
+
 const defaultSuffix = 'GQL';
 const lowerFirstLetter = str => str.charAt(0).toLowerCase() + str.slice(1);
 const camelToSnakeCase = str => lowerFirstLetter(str).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
@@ -192,10 +281,15 @@ class PythonOperationsVisitor extends visitorPluginCommon.ClientSideBaseVisitor 
             generateAsync: rawConfig.generateAsync,
         }, documents);
         this._operationsToInclude = [];
+        this.keywords = new Set(csharpKeywords);
         this.overruleConfigSettings();
         autoBind(this);
         this._schemaAST = graphql.parse(graphql.printSchema(schema));
         this._usingNearFileOperations = true;
+    }
+    convertSafeName(node) {
+        const name = typeof node === 'string' ? node : node.value;
+        return this.keywords.has(name) ? `_${name}` : name;
     }
     // Some settings aren't supported with C#, overruled here
     overruleConfigSettings() {
@@ -540,7 +634,7 @@ ${this._gql(node)}
                 if (!node.selectionSet) {
                     const responseTypeName = wrapFieldType(responseType, responseType.listType, 'List');
                     if (!fieldAsFragment) {
-                        return visitorPluginCommon.indentMultiline([`${node.name.value}: "${responseTypeName}"`].join('\n') + '\n');
+                        return visitorPluginCommon.indentMultiline([`${this.convertSafeName(node.name.value)}: "${responseTypeName}"`].join('\n') + '\n');
                     }
                     else {
                         return ''; // `${node.name.value}: "${responseTypeName}"` + '\n';
@@ -596,7 +690,7 @@ ${this._gql(node)}
                                 return this._getResponseFieldRecursive(s, innerClassSchema, false);
                             })
                                 .join('\n')).string;
-                            return visitorPluginCommon.indentMultiline([innerClassDefinition, `${node.name.value}: ${selectionTypeName}`].join('\n'));
+                            return visitorPluginCommon.indentMultiline([innerClassDefinition, `${this.convertSafeName(node.name.value)}: ${selectionTypeName}`].join('\n'));
                         }
                         return '';
                     }

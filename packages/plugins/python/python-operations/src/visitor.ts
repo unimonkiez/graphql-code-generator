@@ -25,6 +25,7 @@ import {
   isEnumType,
   isInputObjectType,
   TypeNode,
+  NameNode,
 } from 'graphql';
 import { PythonOperationsRawPluginConfig } from './config';
 import { Types } from '@graphql-codegen/plugin-helpers';
@@ -38,6 +39,7 @@ import {
   PythonFieldType,
   wrapFieldType,
 } from '../../common/common';
+import { csharpKeywords } from '../../common/keywords';
 
 const defaultSuffix = 'GQL';
 
@@ -68,6 +70,7 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
 
   private _schemaAST: DocumentNode;
   private _usingNearFileOperations: boolean;
+  private readonly keywords = new Set(csharpKeywords);
 
   constructor(
     schema: GraphQLSchema,
@@ -96,6 +99,11 @@ export class PythonOperationsVisitor extends ClientSideBaseVisitor<
 
     this._schemaAST = parse(printSchema(schema));
     this._usingNearFileOperations = true;
+  }
+
+  private convertSafeName(node: NameNode | string): string {
+    const name = typeof node === 'string' ? node : node.value;
+    return this.keywords.has(name) ? `_${name}` : name;
   }
 
   // Some settings aren't supported with C#, overruled here
@@ -500,7 +508,9 @@ ${this._gql(node)}
         if (!node.selectionSet) {
           const responseTypeName = wrapFieldType(responseType, responseType.listType, 'List');
           if (!fieldAsFragment) {
-            return indentMultiline([`${node.name.value}: "${responseTypeName}"`].join('\n') + '\n');
+            return indentMultiline(
+              [`${this.convertSafeName(node.name.value)}: "${responseTypeName}"`].join('\n') + '\n'
+            );
           } else {
             return ''; // `${node.name.value}: "${responseTypeName}"` + '\n';
           }
@@ -563,7 +573,9 @@ ${this._gql(node)}
                     })
                     .join('\n')
                 ).string;
-              return indentMultiline([innerClassDefinition, `${node.name.value}: ${selectionTypeName}`].join('\n'));
+              return indentMultiline(
+                [innerClassDefinition, `${this.convertSafeName(node.name.value)}: ${selectionTypeName}`].join('\n')
+              );
             }
             return '';
           }

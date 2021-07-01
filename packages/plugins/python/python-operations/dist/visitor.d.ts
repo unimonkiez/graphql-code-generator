@@ -22,12 +22,14 @@ export declare class PythonOperationsVisitor extends ClientSideBaseVisitor<
   private _operationsToInclude;
   private _schemaAST;
   private _usingNearFileOperations;
+  private readonly keywords;
   constructor(
     schema: GraphQLSchema,
     fragments: LoadedFragment[],
     rawConfig: PythonOperationsRawPluginConfig,
     documents?: Types.DocumentFile[]
   );
+  private convertSafeName;
   private overruleConfigSettings;
   protected _gql(node: OperationDefinitionNode): string;
   private _nonScalarPrefix;
