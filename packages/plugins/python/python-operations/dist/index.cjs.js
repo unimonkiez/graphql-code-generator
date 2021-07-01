@@ -410,7 +410,8 @@ ${isAsync ? 'async ' : ''}def ${camelToSnakeCase(this.convertName(node)).toLower
     ${inputs.map(v => `"${v.name}": ${v.value},`).join('\n      ')}
   }`;
         const resposeClass = `${this.convertName(node.name.value).replace(/_/g, '')}Response`;
-        const content = isAsync ? `
+        const content = isAsync
+            ? `
 async with self.__websocket_client as client:
   variables = ${variables}
   variables_no_none = {k:v for k,v in variables.items() if v is not None}
@@ -422,7 +423,8 @@ async with self.__websocket_client as client:
     response_dict = remove_empty(response_dict)
     ret: ${resposeClass} = from_dict(data_class=${resposeClass}, data=response_dict, config=Config(cast=[Enum], check_types=False))
     yield ret
-    ` : `
+    `
+            : `
 variables = ${variables}
 variables_no_none = {k:v for k,v in variables.items() if v is not None}
 generator = self.__websocket_client.call(
@@ -719,7 +721,8 @@ def remove_empty(dict_or_list):
     else:
         return dict_or_list
 
-${!config.generateAsync ? `
+${!config.generateAsync
+        ? `
 # adapted from https://github.com/profusion/sgqlc/blob/master/sgqlc/endpoint/websocket.py
 class WebsocketClient:
   def __init__(self, url, connection_payload, **ws_options):
@@ -786,19 +789,20 @@ class WebsocketClient:
 
     finally:
         ws.close()
-` : ''}
+`
+        : ''}
 `;
 };
 const getClient = (config) => {
     return `
 class Client:
-  def __init__(self, url: str, headers: Optional[Dict[str, Any]] = None, ws_connection_payload: Optional[Dict[str, Any]] = None, secure: bool = True):
+  def __init__(self, url: str, ws_url: str, headers: Optional[Dict[str, Any]] = None, ws_connection_payload: Optional[Dict[str, Any]] = None, secure: bool = True):
 
-    if "://" in url:
+    if "://" in url or "://" in ws_url:
       raise ValueError("pass url without scheme! Example: '127.0.0.1:8080/graphql'")
     
     http_url = ("https://" if secure else "http://") + url
-    ws_url = ("wss://" if secure else "ws://") + url
+    ws_url = ("wss://" if secure else "ws://") + ws_url
     ${config.generateAsync
         ? `
 
@@ -808,7 +812,8 @@ class Client:
     self.__websocket_transport = WebsocketsTransport(url=ws_url, init_payload=headers)
     self.__websocket_client = GqlClient(transport=self.__websocket_transport, fetch_schema_from_transport=False)
 
-    ` : `
+    `
+        : `
     self.__http_transport = RequestsHTTPTransport(url=http_url, headers=headers)
     self.__client = GqlClient(transport=self.__http_transport, fetch_schema_from_transport=False)
 
