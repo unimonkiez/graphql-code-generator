@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import {
   ClientSideBaseVisitor,
   ClientSideBasePluginConfig,
@@ -535,7 +536,6 @@ ${this._gql(node)}
 
           const fragmentTypes: string[] = [Kind.FRAGMENT_SPREAD, Kind.INLINE_FRAGMENT];
           const isSomeChildFragments = node.selectionSet.selections.some(s => fragmentTypes.indexOf(s.kind) !== -1);
-
           const nonFragmentChilds = node.selectionSet.selections.flatMap(s => (s.kind !== Kind.FIELD ? [] : s));
 
           if (isSomeChildFragments) {
@@ -545,7 +545,7 @@ ${this._gql(node)}
                 ...node.selectionSet.selections.map(s => {
                   return this._getResponseFieldRecursive(s, innerClassSchema, true, undefined, nonFragmentChilds);
                 }),
-                `${node.name.value}: List[Union[${node.selectionSet.selections
+                `${node.name.value}: ${responseType.listType ? 'List[' : ''}Union[${node.selectionSet.selections
                   .flatMap(s => (s.kind === Kind.FIELD ? [] : s))
                   .map(s => {
                     if (s.kind === Kind.INLINE_FRAGMENT) {
@@ -556,7 +556,7 @@ ${this._gql(node)}
                     //return s.name.value;
                     throw Error('Unknown Type');
                   })
-                  .join(', ')}]]`,
+                  .join(', ')}]${responseType.listType ? ']' : ''}`,
               ].join('\n')
             );
             return ret;

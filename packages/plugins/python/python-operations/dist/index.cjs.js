@@ -266,6 +266,7 @@ const csharpKeywords = [
     'while',
 ];
 
+/* eslint-disable no-console */
 const defaultSuffix = 'GQL';
 const lowerFirstLetter = str => str.charAt(0).toLowerCase() + str.slice(1);
 const camelToSnakeCase = str => lowerFirstLetter(str).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
@@ -662,7 +663,7 @@ ${this._gql(node)}
                             ...node.selectionSet.selections.map(s => {
                                 return this._getResponseFieldRecursive(s, innerClassSchema, true, undefined, nonFragmentChilds);
                             }),
-                            `${node.name.value}: List[Union[${node.selectionSet.selections
+                            `${node.name.value}: ${responseType.listType ? 'List[' : ''}Union[${node.selectionSet.selections
                                 .flatMap(s => (s.kind === graphql.Kind.FIELD ? [] : s))
                                 .map(s => {
                                 var _a;
@@ -675,7 +676,7 @@ ${this._gql(node)}
                                 //return s.name.value;
                                 throw Error('Unknown Type');
                             })
-                                .join(', ')}]]`,
+                                .join(', ')}]${responseType.listType ? ']' : ''}`,
                         ].join('\n'));
                         return ret;
                     }
