@@ -1,5 +1,4 @@
 import { RawClientSideBasePluginConfig } from '@graphql-codegen/visitor-plugin-common';
-
 /**
  * @description This plugin generates C# `class` based on your GraphQL operations.
  */
@@ -37,7 +36,6 @@ export interface PythonOperationsRawPluginConfig extends RawClientSideBasePlugin
    * ```
    */
   subscriptionSuffix?: string;
-
   /**
    * @description Allows to define a custom schemaUrl.
    * @default Same from codegen.yml

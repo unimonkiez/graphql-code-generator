@@ -21,3 +21,7 @@ out.txt
 tsconfig.tsbuildinfo
 .yarn
 recompile.sh
+!packages/plugins/python/python/dist
+!packages/plugins/python/python-operations/dist
+!packages/presets/near-operation-file/dist
+!packages/plugins/other/visitor-plugin-common/dist

@@ -41,7 +41,7 @@ export class PythonOperationVariablesToObject extends OperationVariablesToObject
 
       return `${prefix}Optional[List[${innerType}]]`;
     } else {
-      return `${prefix}Optional[${baseType}]`;
+      return `${prefix}Optional["${baseType}"]`;
     }
   }
 
